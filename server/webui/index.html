@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="favicon.ico?v=3">
+<title>KiteChat 控制台</title>
+<style>
+:root{
+  --bg:#101216;--panel:#15181d;--panel2:#1b1e24;--border:#272b33;--border2:#323742;
+  --text:#e6e8eb;--muted:#8b93a1;--accent:#0aa87a;--accent2:#0cc38e;
+  --green:#2ea043;--red:#e5484d;--yellow:#d29922;
+  --mono:"Cascadia Mono",Consolas,"JetBrains Mono","Courier New",monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:"Segoe UI",system-ui,"Microsoft YaHei",sans-serif;min-height:100vh;font-size:14px}
+a{color:var(--accent2);text-decoration:none}
+code,.mono{font-family:var(--mono);font-size:12.5px;background:var(--panel2);border:1px solid var(--border);padding:1px 6px;border-radius:4px;color:#c9d4e3;word-break:break-all}
+.wrap{max-width:1040px;margin:0 auto;padding:20px 20px 70px}
+
+/* header */
+header{display:flex;align-items:center;justify-content:space-between;padding:14px 0 20px;gap:12px;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:11px}
+.logo .mark{width:34px;height:34px;border-radius:8px;object-fit:cover}
+.logo h1{font-size:16px;font-weight:600;letter-spacing:.2px}
+.logo .sub{color:var(--muted);font-size:11.5px;margin-top:1px}
+.hstats{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:6px;font-size:12px;color:var(--muted);background:var(--panel);border:1px solid var(--border)}
+.dot{width:7px;height:7px;border-radius:50%;background:#555}
+.dot.on{background:var(--green)}
+.dot.off{background:var(--red)}
+
+/* login */
+#login{max-width:360px;margin:14vh auto;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:32px}
+#login h2{margin-bottom:6px;font-size:17px}
+#login p{color:var(--muted);font-size:12.5px;margin-bottom:20px;line-height:1.6}
+
+/* tabs */
+.tabs{display:flex;gap:2px;margin-bottom:18px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.tab{padding:9px 15px;cursor:pointer;color:var(--muted);font-size:13px;border-bottom:2px solid transparent;margin-bottom:-1px;transition:.12s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--text);border-bottom-color:var(--accent);font-weight:600}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:22px;margin-bottom:16px}
+.card h3{font-size:14.5px;margin-bottom:4px;font-weight:600}
+.card .desc{color:var(--muted);font-size:12.5px;margin-bottom:16px;line-height:1.7}
+.page{display:none}
+.page.active{display:block}
+
+/* form */
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
+.field input,.field select{width:100%;background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:13px;outline:none;transition:.12s}
+.field input:focus,.field select:focus{border-color:var(--accent)}
+.field input.mono{font-family:var(--mono);font-size:12.5px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.btn{display:inline-flex;align-items:center;gap:7px;background:var(--accent);color:#fff;border:1px solid var(--accent);padding:8px 18px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;transition:.12s}
+.btn:hover{background:var(--accent2);border-color:var(--accent2)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.ghost{background:transparent;border:1px solid var(--border2);color:var(--text)}
+.btn.ghost:hover{border-color:var(--muted)}
+.btn.danger{background:transparent;border:1px solid rgba(229,72,77,.5);color:#f08a8d}
+.btn.danger:hover{background:rgba(229,72,77,.12)}
+.btn.sm{padding:5px 12px;font-size:12px}
+.btns{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:4px}
+.hint{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.7}
+.hint code{font-size:11px}
+
+/* toast */
+#toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:99;display:flex;flex-direction:column;gap:7px}
+.toast{background:var(--panel2);border:1px solid var(--border2);padding:9px 18px;border-radius:6px;font-size:12.5px;box-shadow:0 6px 20px rgba(0,0,0,.4);animation:tin .15s}
+.toast.ok{border-left:3px solid var(--green)}
+.toast.err{border-left:3px solid var(--red)}
+@keyframes tin{from{opacity:0;transform:translateY(-6px)}to{opacity:1}}
+
+/* table */
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;color:var(--muted);font-weight:500;padding:7px 9px;border-bottom:1px solid var(--border);font-size:12px}
+td{padding:9px;border-bottom:1px solid var(--border)}
+tr:last-child td{border-bottom:none}
+.avatar{width:26px;height:26px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#fff;vertical-align:middle;margin-right:8px}
+
+/* status pills */
+.pill{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:4px;font-size:12px;border:1px solid var(--border2);background:var(--panel2);color:var(--muted)}
+.pill i{width:7px;height:7px;border-radius:50%;display:inline-block;background:#555}
+.pill.ok{color:#8fd6a4;border-color:rgba(46,160,67,.45)}
+.pill.ok i{background:var(--green)}
+.pill.bad{color:#f0a3a5;border-color:rgba(229,72,77,.45)}
+.pill.bad i{background:var(--red)}
+.pill.warn{color:#e5c07b;border-color:rgba(210,153,34,.45)}
+.pill.warn i{background:var(--yellow)}
+
+/* export */
+.progress{height:8px;background:var(--panel2);border-radius:4px;overflow:hidden;margin:12px 0;border:1px solid var(--border)}
+.progress>div{height:100%;background:var(--accent);transition:width .4s;width:0}
+.stage{color:var(--muted);font-size:12.5px;margin-bottom:2px}
+.dl-list{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+.dl-card{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:15px 18px;min-width:240px}
+.dl-card .t{font-weight:600;margin-bottom:3px;font-size:13px;display:flex;align-items:center;gap:8px}
+.dl-card .tag{font-size:10px;font-weight:700;letter-spacing:.6px;color:var(--muted);border:1px solid var(--border2);border-radius:3px;padding:1px 6px}
+.dl-card .s{color:var(--muted);font-size:11.5px;margin-bottom:10px;line-height:1.6;word-break:break-all}
+
+pre.logs{background:#0b0d10;border:1px solid var(--border);border-radius:8px;padding:13px;font-family:var(--mono);font-size:11.5px;line-height:1.7;max-height:420px;overflow:auto;color:#9fbf9f;white-space:pre-wrap;word-break:break-all}
+.kv{display:grid;grid-template-columns:170px 1fr;gap:4px 14px;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;line-height:1.7;align-items:start}
+.kv:last-child{border:none}
+.kv b{color:var(--muted);font-weight:500;font-size:12.5px}
+.kv span{min-width:0;word-break:break-word;overflow-wrap:anywhere}
+@media (max-width:560px){.kv{grid-template-columns:1fr}.row{grid-template-columns:1fr}}
+.foot{color:#565d68;font-size:11px;text-align:center;margin-top:26px;font-family:var(--mono)}
+/* modal */
+.modal-mask{position:fixed;inset:0;background:rgba(10,12,16,.55);display:none;align-items:center;justify-content:center;z-index:90}
+.modal{background:var(--panel);border:1px solid var(--border2);border-radius:10px;width:min(420px,92vw);padding:24px}
+.modal h3{font-size:15px;margin-bottom:4px}
+.modal .desc{color:var(--muted);font-size:12px;margin-bottom:16px;line-height:1.6}
+.modal .btns{margin-top:16px}
+</style>
+</head>
+<body>
+<div id="toast"></div>
+
+<!-- ================= LOGIN ================= -->
+<div id="login">
+  <h2>KiteChat 控制台</h2>
+  <p>输入管理员令牌登录。令牌在服务端首次启动时打印于控制台，也可用 run.py --new-token 重新生成。</p>
+  <div class="field"><input id="ltoken" type="password" placeholder="admin token" onkeydown="if(event.key==='Enter')doLogin()"></div>
+  <button class="btn" style="width:100%;justify-content:center" onclick="doLogin()">登 录</button>
+</div>
+
+<!-- ================= MAIN ================= -->
+<div class="wrap" id="main" style="display:none">
+  <header>
+    <div class="logo">
+      <img class="mark" src="/static/logo.png?v=3" alt="KiteChat">
+      <div>
+        <h1>KiteChat 控制台</h1>
+        <div class="sub">OneBot V11 服务端管理</div>
+      </div>
+    </div>
+    <div class="hstats">
+      <span class="badge"><span class="dot" id="bridgeDot"></span><span id="bridgeText">Bot 桥接</span></span>
+      <span class="badge"><span class="dot on"></span><span id="onlineText">0 在线</span></span>
+      <button class="btn ghost sm" onclick="logout()">退出</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <div class="tab active" data-page="overview">总览</div>
+    <div class="tab" data-page="server">服务端设置</div>
+    <div class="tab" data-page="smtp">SMTP 邮箱</div>
+    <div class="tab" data-page="ai">AI / Bot 接入</div>
+    <div class="tab" data-page="export">客户端导出</div>
+    <div class="tab" data-page="users">用户管理</div>
+    <div class="tab" data-page="logs">运行日志</div>
+    <div style="flex:1"></div>
+    <button class="btn ghost sm" onclick="confirmRestart()" style="white-space:nowrap">重启服务端</button>
+  </div>
+
+  <!-- overview -->
+  <div class="page active" id="page-overview">
+    <div class="card">
+      <h3>系统状态</h3>
+      <div class="desc">服务端运行概况</div>
+      <div id="overviewKv"></div>
+    </div>
+  </div>
+
+  <!-- server config -->
+  <div class="page" id="page-server">
+    <div class="card">
+      <h3>服务端 WS 地址</h3>
+      <div class="desc">导出客户端时自动绑定该地址，客户端打开即用，无需用户配置。留空则自动使用本机局域网 IP。</div>
+      <div class="field">
+        <label>WS 地址（ws://ip:端口）</label>
+        <input id="cfg-ws_address" class="mono" placeholder="例如 ws://192.168.1.100:8920">
+      </div>
+      <div class="row">
+        <div class="field"><label>监听地址</label><input id="cfg-host" class="mono" placeholder="0.0.0.0"></div>
+        <div class="field"><label>监听端口</label><input id="cfg-port" class="mono" placeholder="8920"></div>
+      </div>
+      <div class="hint">修改端口后需要重启服务端生效。客户端连接入口 <code>/ws</code>，OneBot V11 反向接入 <code>/onebot</code></div>
+    </div>
+    <div class="card">
+      <h3>TLS / SSL 证书（HTTPS）</h3>
+      <div class="desc">开启 HTTPS 后，8920 端口直接提供安全上下文（相机/扫码可用），关闭后走 HTTP。保存设置后需点击重启生效。</div>
+      <div class="field">
+        <label>启用 HTTPS</label>
+        <select id="cfg-tls_enabled" class="mono">
+          <option value="1">开启（提供安全上下文，相机/扫码可用）</option>
+          <option value="0">关闭（仅 HTTP，启动更快）</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>证书文件（fullchain.pem）</label>
+        <div class="row" style="align-items:center;gap:10px;">
+          <input type="file" id="cfg-tls_cert_file" accept=".pem,.crt,.cer" style="flex:1;font-size:12px;">
+          <span style="color:var(--muted);font-size:11px;">或直接粘贴 ↓</span>
+        </div>
+        <textarea id="cfg-tls_cert" rows="5" class="mono" placeholder="-----BEGIN CERTIFICATE-----&#10;... PEM 格式的证书链 ...&#10;-----END CERTIFICATE-----"></textarea>
+        <div class="hint" id="tlsCertHint"></div>
+      </div>
+      <div class="field">
+        <label>私钥文件（privkey.pem）</label>
+        <div class="row" style="align-items:center;gap:10px;">
+          <input type="file" id="cfg-tls_key_file" accept=".pem,.key" style="flex:1;font-size:12px;">
+          <span style="color:var(--muted);font-size:11px;">或直接粘贴 ↓</span>
+        </div>
+        <textarea id="cfg-tls_key" rows="5" class="mono" placeholder="-----BEGIN PRIVATE KEY-----&#10;... PEM 格式的私钥 ...&#10;-----END PRIVATE KEY-----"></textarea>
+        <div class="hint" id="tlsKeyHint"></div>
+      </div>
+      <div class="hint" id="tlsSaveHint"></div>
+    </div>
+    <div class="card">
+      <h3>应用名称</h3>
+      <div class="row">
+        <div class="field"><label>显示名称</label><input id="cfg-app_name" placeholder="KiteChat"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>客户端行为</h3>
+      <div class="desc">客户端（网页/EXE/APK）断线后显示「无法连接到服务器」横幅，并按此间隔自动重连。</div>
+      <div class="row">
+        <div class="field"><label>断线自动重连间隔（秒，2-600）</label><input id="cfg-client_reconnect_interval" class="mono" placeholder="5"></div>
+      </div>
+    </div>
+    <div class="btns">
+      <button class="btn" onclick="saveServer()">保存设置</button>
+      <button class="btn ghost" onclick="loadAll()">重新加载</button>
+    </div>
+  </div>
+
+  <!-- smtp -->
+  <div class="page" id="page-smtp">
+    <div class="card">
+      <h3>SMTP 邮箱配置</h3>
+      <div class="desc">用于发送注册验证码邮件。QQ 邮箱授权码获取：QQ 邮箱 - 设置 - 账号 - POP3/SMTP 服务。端口 465 用 SSL，587 用 STARTTLS。</div>
+      <div class="row">
+        <div class="field"><label>SMTP 服务器地址</label><input id="cfg-smtp_host" class="mono" placeholder="smtp.qq.com"></div>
+        <div class="field"><label>SMTP 端口</label><input id="cfg-smtp_port" class="mono" placeholder="465"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>发件邮箱</label><input id="cfg-smtp_user" class="mono" placeholder="yourname@qq.com"></div>
+        <div class="field"><label>授权码 / 密码</label><input id="cfg-smtp_pass" type="password" placeholder="留空 = 保持原值"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>发件人昵称</label><input id="cfg-smtp_sender_name" placeholder="KiteChat"></div>
+        <div class="field"><label>加密方式</label>
+          <select id="cfg-smtp_ssl"><option value="1">SSL（465）</option><option value="0">STARTTLS（587）</option></select>
+        </div>
+      </div>
+      <div class="btns">
+        <button class="btn" onclick="saveSmtp()">保存 SMTP</button>
+        <span class="hint" id="smtpReady"></span>
+      </div>
+      <div class="field" style="margin-top:14px"><label>测试邮件收件人</label><input id="testMailTo" class="mono" placeholder="留空则发给发件邮箱自己"></div>
+      <div class="btns">
+        <button class="btn ghost" onclick="testMail()">发送测试邮件</button>
+        <span class="hint" id="testMailMsg"></span>
+      </div>
+      <div style="margin-top:18px">
+        <label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">注册邮箱域名白名单（填 @ 后面的部分，不含 @；留空 = 不限制）</label>
+        <table>
+          <thead><tr><th style="width:70%">域名</th><th>操作</th></tr></thead>
+          <tbody id="wlBody"></tbody>
+        </table>
+        <div class="btns" style="margin-top:8px">
+          <button class="btn ghost sm" onclick="addWlRow()">+ 添加域名</button>
+          <button class="btn sm" onclick="saveWl()">保存白名单</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ai / bot -->
+  <div class="page" id="page-ai">
+    <div class="card">
+      <h3>OneBot V11 Bot 接入（正向 WS）</h3>
+      <div class="desc">服务端主动连接外部标准 OneBot V11 Bot（如 NapCat / go-cqhttp / AstrBot 的正向 WS）。AI 会话的消息会转发给它，回复按虚拟 QQ 号路由回用户。留空则不启用。</div>
+      <div class="field"><label>Bot WS 地址</label><input id="cfg-bot_ws_url" class="mono" placeholder="ws://127.0.0.1:3001"></div>
+      <div class="hint">反向接入：把 Bot 的反向WS 地址填为 <code id="revWs"></code>，效果相同。用户虚拟号（代号）从 #1 开始递增。</div>
+    </div>
+    <div class="card">
+      <h3>OneBot 应用接入（AstrBot 等，KiteChat 作为实现端）</h3>
+      <div class="desc">所有 AI 会话的回复都来自 OneBot V11 应用（AstrBot）。KiteChat 作为实现端主动连接应用的反向 WS（如 AstrBot aiocqhttp 适配器默认 6199），用户消息以虚拟 QQ 私聊事件推送，应用回复自动路由回用户。KiteChat 本身不带任何 AI 模型。</div>
+      <div class="field"><label>应用反向 WS 地址</label><input id="cfg-app_ws_url" class="mono" placeholder="ws://127.0.0.1:6199/ws"></div>
+      <div class="hint">AstrBot：保持 aiocqhttp 平台开启（反向 WS 默认 0.0.0.0:6199），此处填 <code>ws://127.0.0.1:6199/ws</code>。</div>
+      <div class="field"><label>断线自动重连间隔（秒，2-600）</label><input id="cfg-bridge_reconnect_interval" class="mono" placeholder="5"></div>
+      <div class="btns">
+        <button class="btn" onclick="saveAi()">保存 AI 设置</button>
+        <button class="btn ghost" id="btnReconnect" onclick="reconnectBridge()">立即尝试重连</button>
+        <button class="btn ghost" onclick="loadAll()">重新加载</button>
+      </div>
+      <div class="hint" id="reconnectMsg" style="margin-top:6px"></div>
+    </div>
+    <div class="btns">
+      <button class="btn" onclick="loadAll()">重新加载全部配置</button>
+    </div>
+  </div>
+
+  <!-- export -->
+  <div class="page" id="page-export">
+    <div class="card">
+      <h3>客户端导出</h3>
+      <div class="desc">自动把当前 WS 地址注入客户端并编译：Windows EXE（pywebview + PyInstaller）与 Android APK（Gradle + 签名）。用户下载后打开即用，无需任何配置。</div>
+      <div class="field">
+        <label>绑定的 WS 地址（默认取服务端设置）</label>
+        <input id="exportWs" class="mono" placeholder="ws://192.168.1.100:8920">
+      </div>
+      <div class="field">
+        <label>版本号（写进 APK，安装时显示；如 1.2.0）</label>
+        <input id="exportVersion" class="mono" placeholder="1.1.0">
+      </div>
+      <div class="field">
+        <label>Android 连接协议（开发环境选 HTTP 启动更快；HTTPS 供扫码相机使用）</label>
+        <select id="exportScheme" class="mono">
+          <option value="auto">自动（先试 HTTPS，失败退回 HTTP）</option>
+          <option value="http">HTTP（开发环境，启动最快）</option>
+          <option value="https">HTTPS（生产环境，扫码相机可用）</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>SSL CA 证书（HTTPS 模式下 APK 需要信任此证书；PEM 格式，留空则使用内置默认）</label>
+        <textarea id="exportCert" rows="4" class="mono" placeholder="-----BEGIN CERTIFICATE-----&#10;... PEM 格式的 CA 证书 ...&#10;-----END CERTIFICATE-----"></textarea>
+        <div class="hint" id="certStatus"></div>
+      </div>
+      <div class="btns">
+        <button class="btn" id="btnExpAll" onclick="startExport('all')">导出双端客户端</button>
+        <button class="btn ghost" onclick="startExport('windows')">仅 Windows EXE</button>
+        <button class="btn ghost" onclick="startExport('android')">仅 Android APK</button>
+      </div>
+      <div id="exportProgress" style="display:none;margin-top:16px">
+        <div class="stage" id="expStage">准备中…</div>
+        <div class="progress"><div id="expBar"></div></div>
+        <div class="hint" id="expError" style="color:var(--red)"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>已构建的客户端</h3>
+      <div class="desc">点击下载分发给用户</div>
+      <div class="dl-list" id="dlList"><span class="hint">还没有产物，先执行一次导出</span></div>
+    </div>
+  </div>
+
+  <!-- users -->
+  <div class="page" id="page-users">
+    <div class="card">
+      <h3>注册用户</h3>
+      <div class="desc">账号系统数据</div>
+      <table>
+        <thead><tr><th>ID</th><th>用户</th><th>邮箱</th><th>状态</th><th>注册时间</th><th>操作</th></tr></thead>
+        <tbody id="userRows"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- logs -->
+  <div class="page" id="page-logs">
+    <div class="card">
+      <h3>运行日志（最近 200 行）</h3>
+      <div class="btns" style="margin-bottom:12px"><button class="btn ghost sm" onclick="loadLogs()">刷新</button></div>
+      <pre class="logs" id="logBox">加载中…</pre>
+    </div>
+  </div>
+
+  <div class="foot">KiteChat v1.0.0 · OneBot V11</div>
+</div>
+
+<!-- change token modal -->
+<div class="modal-mask" id="tokenModal">
+  <div class="modal">
+    <h3>修改管理员令牌</h3>
+    <div class="desc">修改后立即生效，旧令牌失效。请妥善保存新令牌（也可用 run.py --new-token 在服务器端重置）。</div>
+    <div class="field">
+      <label>新令牌（留空 = 自动生成随机令牌）</label>
+      <input id="newToken" class="mono" placeholder="至少 8 个字符，不含空格">
+    </div>
+    <div class="btns">
+      <button class="btn" onclick="confirmChangeToken()">确认修改</button>
+      <button class="btn ghost" onclick="genRandomToken()">随机生成填入</button>
+      <button class="btn ghost" onclick="document.getElementById('tokenModal').style.display='none'">取消</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let TOKEN = localStorage.getItem('nova_admin') || '';
+
+function toast(msg, ok=true){
+  const box = document.getElementById('toast');
+  const el = document.createElement('div');
+  el.className = 'toast ' + (ok?'ok':'err');
+  el.textContent = msg;
+  box.appendChild(el);
+  setTimeout(()=>el.remove(), 3500);
+}
+async function api(path, method='GET', body=null){
+  const opt = {method, headers:{'X-Admin-Token':TOKEN}};
+  if(body) {opt.headers['Content-Type']='application/json'; opt.body=JSON.stringify(body);}
+  const r = await fetch(path, opt);
+  const j = await r.json().catch(()=>({status:'failed',msg:'响应解析失败'}));
+  if(j.status !== 'ok') throw new Error(j.msg || ('HTTP '+r.status));
+  return j.data;
+}
+
+// ---------- login ----------
+async function doLogin(){
+  TOKEN = document.getElementById('ltoken').value.trim();
+  try{
+    await api('/api/admin/login','POST',{token:TOKEN});
+    localStorage.setItem('nova_admin', TOKEN);
+    showMain();
+  }catch(e){ toast('登录失败: '+e.message, false); TOKEN=''; }
+}
+function logout(){ localStorage.removeItem('nova_admin'); location.reload(); }
+
+function showMain(){
+  document.getElementById('login').style.display='none';
+  document.getElementById('main').style.display='block';
+  loadAll();
+  setInterval(loadStatus, 8000);
+}
+
+// ---------- tabs ----------
+document.querySelectorAll('.tab').forEach(t=>{
+  t.onclick = ()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('page-'+t.dataset.page).classList.add('active');
+    if(t.dataset.page==='users') loadUsers();
+    if(t.dataset.page==='logs') loadLogs();
+    if(t.dataset.page==='export') loadExportStatus();
+  };
+});
+
+// ---------- status pills ----------
+function pill(ok, text){
+  return '<span class="pill '+(ok?'ok':'bad')+'"><i></i>'+text+'</span>';
+}
+
+// ---------- load config ----------
+async function loadAll(){
+  try{
+    const c = await api('/api/admin/config');
+    const set = (id,v)=>{const el=document.getElementById(id); if(el) el.value = v||'';};
+    set('cfg-ws_address', c.ws_address || c.public_ws);
+    set('cfg-host', c.host); set('cfg-port', c.port);
+    set('cfg-app_name', c.app_name);
+    set('cfg-client_reconnect_interval', c.client_reconnect_interval || '5');
+    document.getElementById('cfg-tls_enabled').value = c.tls_enabled || '0';
+    // TLS cert/key: load saved content into textareas
+    if (c.tls_cert) {
+      set('cfg-tls_cert', c.tls_cert);
+      const lines = c.tls_cert.split('\n').length;
+      document.getElementById('tlsCertHint').textContent = '当前已加载证书（' + lines + ' 行）— 保存后覆盖到 data/tls/fullchain.pem';
+    } else {
+      document.getElementById('tlsCertHint').innerHTML = '<span style="color:var(--muted)">未配置证书 — 请上传或粘贴 PEM 内容后保存</span>';
+    }
+    if (c.tls_key) {
+      set('cfg-tls_key', c.tls_key);
+      document.getElementById('tlsKeyHint').textContent = '当前已加载私钥（已脱敏显示）— 保存后覆盖到 data/tls/privkey.pem';
+    } else {
+      document.getElementById('tlsKeyHint').innerHTML = '<span style="color:var(--muted)">未配置私钥 — 请上传或粘贴 PEM 内容后保存</span>';
+    }
+    document.getElementById('tlsSaveHint').innerHTML = '<span style="color:var(--muted)">保存后需重启服务端加载新证书。</span>';
+    set('cfg-smtp_host', c.smtp_host); set('cfg-smtp_port', c.smtp_port);
+    set('cfg-smtp_user', c.smtp_user);
+    document.getElementById('cfg-smtp_ssl').value = c.smtp_ssl==='0'?'0':'1';
+    set('cfg-smtp_sender_name', c.smtp_sender_name);
+    renderWl((c.email_domain_whitelist||'').split(',').filter(Boolean));
+    set('cfg-bot_ws_url', c.bot_ws_url);
+    set('cfg-app_ws_url', c.app_ws_url);
+    set('cfg-bridge_reconnect_interval', c.bridge_reconnect_interval || '5');
+    set('exportWs', c.ws_address || c.public_ws);
+    set('exportVersion', c.export_version || '');
+    document.getElementById('exportScheme').value = c.export_scheme || 'auto';
+    // show current SSL CA cert status
+    const certEl = document.getElementById('certStatus');
+    const hasCert = c.ssl_ca_cert_pem && c.ssl_ca_cert_pem.length > 20;
+    if (certEl) {
+      certEl.innerHTML = hasCert
+        ? '<span style="color:var(--green)">已加载 CA 证书（' + c.ssl_ca_cert_pem.split('\\n').length + ' 行）</span> — 导出时将自动嵌入 APK'
+        : '<span style="color:var(--muted)">未设置 CA 证书 — 导出 HTTPS 版时将使用内置默认证书</span>';
+    }
+    document.getElementById('cfg-smtp_pass').placeholder = c.smtp_pass_masked ? '已配置（'+c.smtp_pass_masked+'），留空保持' : '授权码';
+
+    document.getElementById('smtpReady').innerHTML = c.smtp_ready
+      ? '<span class="pill ok"><i></i>SMTP 已配置可用</span>'
+      : '<span class="pill warn"><i></i>SMTP 未完整配置</span>';
+    document.getElementById('revWs').textContent = c.public_ws.replace('/ws','/onebot');
+    renderOverview(c);
+    updateBridge(c);
+  }catch(e){
+    if(String(e.message).includes('令牌')){ localStorage.removeItem('nova_admin'); location.reload(); }
+    else toast('加载失败: '+e.message, false);
+  }
+}
+function updateBridge(c){
+  const dot = document.getElementById('bridgeDot');
+  dot.className = 'dot ' + (c.bridge_connected ? 'on':'off');
+  document.getElementById('bridgeText').textContent = c.bridge_connected ? 'Bot 已连接' : 'Bot 未连接';
+  document.getElementById('onlineText').textContent = c.online_users + ' 在线';
+}
+function renderOverview(c){
+  const kv = [
+    ['公网 WS 地址', '<code>'+ (c.public_ws||'-') +'</code>'],
+    ['OneBot V11 反向接入', '<code>'+ (c.public_ws||'').replace('/ws','/onebot') +'</code>'],
+    ['Bot 桥接状态', c.bridge_connected ? pill(true,'已连接') : pill(false,'未连接（AI 会话使用内置应答）')],
+    ['SMTP 邮箱', c.smtp_ready ? pill(true, c.smtp_user||'已配置') : pill(false,'未配置（注册验证码不可用）')],
+
+    ['注册用户数', c.user_count],
+    ['当前在线', c.online_users],
+    ['管理员令牌', '<code>'+TOKEN+'</code> <button class="btn ghost sm" onclick="openTokenModal()" style="margin-left:8px">修改</button>'],
+  ];
+  document.getElementById('overviewKv').innerHTML = kv.map(([k,v])=>'<div class="kv"><b>'+k+'</b><span>'+v+'</span></div>').join('');
+}
+async function loadStatus(){
+  try{ const c = await api('/api/admin/config'); updateBridge(c); }catch(e){}
+}
+
+// ---------- save ----------
+async function saveServer(){
+  try{
+    await api('/api/admin/config','POST',{
+      ws_address: v('cfg-ws_address'), host: v('cfg-host'),
+      port: v('cfg-port'), app_name: v('cfg-app_name'),
+      tls_enabled: document.getElementById('cfg-tls_enabled').value,
+      tls_cert: v('cfg-tls_cert'),
+      tls_key: v('cfg-tls_key'),
+      client_reconnect_interval: v('cfg-client_reconnect_interval')||'5'});
+    toast('服务端设置已保存（修改 HTTPS 或证书需重启生效）'); loadAll();
+  }catch(e){ toast(e.message,false); }
+}
+async function saveSmtp(){
+  try{
+    await api('/api/admin/config','POST',{
+      smtp_host:v('cfg-smtp_host'), smtp_port:v('cfg-smtp_port'),
+      smtp_user:v('cfg-smtp_user'), smtp_pass:v('cfg-smtp_pass'),
+      smtp_ssl:document.getElementById('cfg-smtp_ssl').value,
+      smtp_sender_name:v('cfg-smtp_sender_name')});
+    toast('SMTP 设置已保存'); loadAll();
+  }catch(e){ toast(e.message,false); }
+}
+// ---- email domain whitelist (table rows) ----
+function esc(s){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function renderWl(domains){
+  const body = document.getElementById('wlBody');
+  body.innerHTML = '';
+  (domains||[]).forEach(d => addWlRow(d));
+}
+function addWlRow(val){
+  const body = document.getElementById('wlBody');
+  const tr = document.createElement('tr');
+  tr.innerHTML = '<td><input class="wl-domain mono" value="'+esc(val||'')+'" placeholder="qq.com"></td>' +
+                 '<td><button class="btn ghost sm" onclick="this.closest(\'tr\').remove()">删除</button></td>';
+  body.appendChild(tr);
+}
+function saveWl(){
+  const domains = [...document.querySelectorAll('#wlBody .wl-domain')]
+    .map(i => i.value.trim().toLowerCase().replace(/^@+/,'')).filter(Boolean);
+  api('/api/admin/config','POST',{ email_domain_whitelist: domains.join(',') })
+    .then(() => { toast('域名白名单已保存'); loadAll(); })
+    .catch(e => toast(e.message,false));
+}
+async function saveAi(){
+  try{
+    await api('/api/admin/config','POST',{
+      bot_ws_url:v('cfg-bot_ws_url'), app_ws_url:v('cfg-app_ws_url'),
+      bridge_reconnect_interval:v('cfg-bridge_reconnect_interval')||'5',
+      });
+    toast('AI 设置已保存'); loadAll();
+  }catch(e){ toast(e.message,false); }
+}
+async function reconnectBridge(){
+  const btn = document.getElementById('btnReconnect');
+  const msg = document.getElementById('reconnectMsg');
+  btn.disabled = true; btn.textContent = '连接中…';
+  msg.textContent = '';
+  try{
+    const d = await api('/api/admin/reconnect','POST',{});
+    msg.textContent = (d.connected ? '✓ ' : '✗ ') + d.msg;
+    msg.style.color = d.connected ? 'var(--green)' : 'var(--red)';
+    loadAll();
+  }catch(e){
+    msg.textContent = '✗ ' + (e.message || '重连失败');
+    msg.style.color = 'var(--red)';
+  }finally{
+    btn.disabled = false; btn.textContent = '立即尝试重连';
+  }
+}
+async function testMail(){
+  const msgEl = document.getElementById('testMailMsg');
+  const to = document.getElementById('testMailTo').value.trim();
+  msgEl.textContent = '发送中…'; msgEl.style.color = 'var(--muted)';
+  try{
+    await api('/api/admin/test-mail','POST',{to:to});
+    msgEl.textContent = '✓ 测试邮件已发送至 ' + (to || '发件邮箱');
+    msgEl.style.color = 'var(--green)';
+    toast('测试邮件已发送，请查收');
+  }catch(e){
+    msgEl.textContent = '✗ ' + (e.message || '发送失败');
+    msgEl.style.color = 'var(--red)';
+    toast('发送失败: ' + (e.message || '未知错误'), false);
+  }
+}
+function v(id){ return document.getElementById(id).value.trim(); }
+
+// ---------- export ----------
+let expTimer = null;
+async function startExport(target){
+  try{
+    const d = await api('/api/admin/export','POST',{target, ws_address: v('exportWs'), version: v('exportVersion'), scheme: document.getElementById('exportScheme').value, ca_cert: document.getElementById('exportCert').value.trim()});
+    if(d.busy){ toast('已有导出任务在运行', false); return; }
+    toast('导出任务已开始');
+    document.getElementById('exportProgress').style.display='block';
+    document.getElementById('expError').textContent='';
+    pollExport();
+  }catch(e){ toast(e.message,false); }
+}
+async function pollExport(){
+  clearInterval(expTimer);
+  expTimer = setInterval(loadExportStatus, 2000);
+  await loadExportStatus();
+}
+async function loadExportStatus(){
+  try{
+    const d = await api('/api/admin/export/status');
+    const job = d.current;
+    const box = document.getElementById('exportProgress');
+    if(job){
+      box.style.display='block';
+      let extra = '';
+      if(job.status==='running' && job.started_at){
+        const sec = Math.floor(Date.now()/1000 - job.started_at);
+        extra = '，已耗时 ' + sec + 's';
+        if(sec > 60) extra += '（Gradle 首次/冷启动较慢，请耐心等待）';
+      }
+      document.getElementById('expStage').textContent = '当前任务 ['+job.target+'] ' + (job.stage||'等待中') + '（'+job.progress+'%'+extra+'）';
+      document.getElementById('expBar').style.width = job.progress+'%';
+      document.getElementById('expError').textContent = job.error || '';
+      if(job.status==='done'){ toast('导出完成'); clearInterval(expTimer); }
+      if(job.status==='failed'){ clearInterval(expTimer); }
+    }
+    renderDownloads(d);
+  }catch(e){}
+}
+function renderDownloads(d){
+  const list = document.getElementById('dlList');
+  const items = [];
+  for(const j of [...(d.history||[])].reverse()){
+    if(j.status!=='done') continue;
+    for(const [t,name] of Object.entries(j.artifacts||{})){
+      items.push(`<div class="dl-card"><div class="t"><span class="tag">${t==='windows'?'WINDOWS':'ANDROID'}</span>${t==='windows'?'桌面客户端':'安卓客户端'}</div>
+        <div class="s">${name}<br>WS: ${j.ws_address}</div>
+        <a class="btn sm" href="/api/admin/export/download/${t}?token=${encodeURIComponent(TOKEN)}" download>下载</a></div>`);
+    }
+  }
+  list.innerHTML = items.join('') || '<span class="hint">还没有产物，先执行一次导出</span>';
+}
+
+// ---------- users ----------
+async function loadUsers(){
+  try{
+    const d = await api('/api/admin/users');
+    const rows = d.users.map(u=>`<tr>
+      <td>${u.user_id}</td>
+      <td><span class="avatar" style="background:${u.avatar_color}">${u.nickname[0]}</span>${u.nickname}</td>
+      <td class="mono" style="font-size:12px">${u.email}</td>
+      <td>${u.online?'<span class="pill ok"><i></i>在线</span>':'<span class="pill"><i></i>离线</span>'}</td>
+      <td>${new Date(u.created_at*1000).toLocaleString('zh-CN')}</td>
+      <td>${u.user_id===1?'—':'<button class="btn danger sm" onclick="delUser('+u.user_id+')">删除</button>'}</td></tr>`);
+    document.getElementById('userRows').innerHTML = rows.join('') || '<tr><td colspan="6" class="hint">暂无用户</td></tr>';
+  }catch(e){ toast(e.message,false); }
+}
+async function delUser(id){
+  if(!confirm('确定删除该用户？其会话与好友关系将一并删除')) return;
+  try{ await api('/api/admin/delete-user','POST',{user_id:id}); toast('已删除'); loadUsers(); }
+  catch(e){ toast(e.message,false); }
+}
+
+// ---------- logs ----------
+async function loadLogs(){
+  try{
+    const d = await api('/api/admin/logs');
+    document.getElementById('logBox').textContent = d.lines.join('\n') || '（空）';
+  }catch(e){ toast(e.message,false); }
+}
+
+// ---------- change token ----------
+function openTokenModal(){
+  document.getElementById('newToken').value = '';
+  document.getElementById('tokenModal').style.display = 'flex';
+}
+function genRandomToken(){
+  const bytes = crypto.getRandomValues(new Uint8Array(18));
+  const s = btoa(String.fromCharCode(...bytes)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  document.getElementById('newToken').value = s;
+}
+async function confirmChangeToken(){
+  const newTok = document.getElementById('newToken').value.trim();
+  try{
+    const d = await api('/api/admin/change-token','POST',{new_token:newTok});
+    TOKEN = d.token;
+    localStorage.setItem('nova_admin', TOKEN);
+    document.getElementById('tokenModal').style.display = 'none';
+    toast('令牌已修改，请牢记新令牌');
+    loadAll();
+  }catch(e){ toast(e.message, false); }
+}
+
+// ---------- TLS cert/key file upload ----------
+function readFileInto(id, textareaId) {
+  const file = document.getElementById(id).files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => { document.getElementById(textareaId).value = reader.result; };
+  reader.readAsText(file);
+}
+document.getElementById('cfg-tls_cert_file').addEventListener('change', () => readFileInto('cfg-tls_cert_file', 'cfg-tls_cert'));
+document.getElementById('cfg-tls_key_file').addEventListener('change', () => readFileInto('cfg-tls_key_file', 'cfg-tls_key'));
+
+// ---------- restart ----------
+function confirmRestart() {
+  const tlsWasOn = document.getElementById('cfg-tls_enabled').value === '1';
+  if (!confirm('确定要重启服务端吗？当前连接的所有用户会短暂断开。')) return;
+  api('/api/admin/restart', 'POST').then(() => {
+    if (tlsWasOn) {
+      // HTTPS was enabled — server will now serve https:// on same port.
+      // The http:// page can no longer reach the server. Redirect.
+      const httpsUrl = location.origin.replace('http://', 'https://') + '/admin';
+      const hint = document.getElementById('tlsSaveHint');
+      if (hint) hint.innerHTML =
+        '<span style="color:var(--accent);font-weight:bold;font-size:13px">HTTPS 已启用！正在跳转到 <a href="' + httpsUrl + '" style="color:var(--accent)">' + httpsUrl + '</a> …</span>';
+      setTimeout(() => { location.href = httpsUrl; }, 3000);
+    } else {
+      // HTTP mode — just reconnect
+      toast('服务端正在重启，几秒后恢复连接…');
+      let tries = 0;
+      const iv = setInterval(async () => {
+        tries++;
+        try { await api('/api/admin/config'); clearInterval(iv); location.reload(); } catch (_) {}
+        if (tries > 20) { clearInterval(iv); toast('重启超时，请刷新页面', false); }
+      }, 1500);
+    }
+  }).catch(e => toast(e.message, false));
+}
+
+// ---------- boot ----------
+if(TOKEN){ api('/api/admin/login','POST',{token:TOKEN}).then(()=>showMain()).catch(()=>{TOKEN='';}); }
+</script>
+</body>
+</html>

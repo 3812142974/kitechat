@@ -1,0 +1,16 @@
+[project]
+name = "kitechat"
+version = "1.0.0"
+description = "OneBot V11 私有化 AI 聊天双向通信系统（服务端 + Windows/Android 多端客户端）"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "aiohttp>=3.9",          # 运行必需：HTTP + WebSocket
+    "pywebview>=5.0",        # Windows 客户端壳（一键导出 EXE 用）
+    "pyinstaller>=6.0",      # 打包 Windows EXE（一键导出用）
+    "pillow>=10.0",          # 生成三端应用图标（tools/make_icons.py）
+]
+
+[tool.uv]
+# 依赖全部装进项目内的 .venv（D 盘，不碰系统 Python）
+# 启动：.venv/Scripts/python.exe run.py   （或双击 启动服务端.bat）

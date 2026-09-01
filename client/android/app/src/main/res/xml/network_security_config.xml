@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  KiteChat uses a self-signed (mkcert) certificate on the HTTPS/WSS port
+  (default 8921). WebView's camera APIs (getUserMedia) require a secure
+  context, so the APK loads the page over https. Android does not trust our
+  CA by default, so we pin it here for all connections. Cleartext is still
+  permitted so the app can fall back to the plain-HTTP port (8920) when the
+  TLS port is unavailable.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/kitechat_ca" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.KiteChat" parent="Theme.AppCompat.NoActionBar">
+        <!-- let the WebView draw edge-to-edge so the web app can position
+             banners below the status bar / front camera notch itself -->
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+        <item name="android:statusBarColor">#00000000</item>
+        <item name="android:navigationBarColor">#00000000</item>
+    </style>
+</resources>

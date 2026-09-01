@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>KiteChat</title>
+<!-- anti-flicker: apply remembered theme + hide login screen BEFORE first
+     paint (only when a saved token exists). Without this the page renders
+     light + login first, then JS flips it — the "flash" on every open.
+     The html.kc-booted rule is high-specificity so it beats style.css;
+     boot() removes the class when it needs to show the login screen. -->
+<script>
+try{
+  var t=localStorage.getItem('kc_theme')||'auto';
+  document.documentElement.setAttribute('data-theme',t);
+  if(localStorage.getItem('nova_token')){
+    document.documentElement.classList.add('kc-booted');
+  }
+}catch(e){}
+</script>
+<style>html.kc-booted #authView{display:none}</style>
+<link rel="icon" href="favicon.ico?v=3">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="ctoast"></div>
+
+<!-- ======================= AUTH ======================= -->
+<div id="authView">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <img class="mark" src="logo.png" alt="KiteChat">
+      <h1 id="authAppName">KiteChat</h1>
+    </div>
+    <div class="auth-sub" id="authSub">私有化 AI 聊天 · 登录你的账号</div>
+
+    <!-- login form -->
+    <div id="loginForm">
+      <div class="afield"><label>用户名 / 邮箱</label>
+        <input id="lUser" placeholder="输入用户名或邮箱" autocomplete="username"></div>
+      <div class="afield"><label>密码</label>
+        <input id="lPass" type="password" placeholder="输入密码" autocomplete="current-password"
+               onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <div class="auth-err" id="lErr"></div>
+      <button class="abtn" id="lBtn" onclick="doLogin()">登 录</button>
+      <div class="auth-switch">还没有账号？<a onclick="showReg()">立即注册</a></div>
+    </div>
+
+    <!-- register form -->
+    <div id="regForm" style="display:none">
+      <div class="afield"><label>用户名</label>
+        <input id="rUser" placeholder="2-20 位中英文/数字" maxlength="20"></div>
+      <div class="afield"><label>登录密码</label>
+        <input id="rPass" type="password" placeholder="至少 6 位"></div>
+      <div class="afield"><label>确认密码</label>
+        <input id="rPass2" type="password" placeholder="再次输入密码"></div>
+      <div class="afield"><label>绑定邮箱</label>
+        <input id="rEmail" type="email" placeholder="用于接收验证码"></div>
+      <div class="afield"><label>邮箱验证码</label>
+        <div class="acode-row">
+          <input id="rCode" placeholder="6 位验证码" maxlength="6" inputmode="numeric">
+          <button class="abtn small ghost" id="rCodeBtn" onclick="sendCode()">获取验证码</button>
+        </div>
+      </div>
+      <div class="auth-err" id="rErr"></div>
+      <button class="abtn" id="rBtn" onclick="doRegister()">注 册</button>
+      <div class="auth-switch">已有账号？<a onclick="showLogin()">返回登录</a></div>
+    </div>
+    <div style="margin-top:14px;text-align:center"><button class="theme-btn" id="themeBtnAuth" onclick="cycleTheme()">◐ 跟随系统</button></div>
+    <div class="auth-note" id="authServerNote"></div>
+  </div>
+</div>
+
+<!-- ======================= APP ======================= -->
+<div id="appView">
+  <!-- mobile topbar: ☰ (my info) / title / ＋ (scan, add friend) -->
+  <div class="mobile-topbar" id="mobileTopbar">
+    <button class="mt-btn" title="我的信息" onclick="openMyInfo()">☰</button>
+    <div class="mt-title" id="mtTitle">KiteChat</div>
+    <button class="mt-btn" title="添加" onclick="togglePlusMenu(this)" style="font-weight:700">＋</button>
+  </div>
+
+  <!-- floating + menu -->
+  <div class="plus-menu" id="plusMenu" style="display:none">
+    <div class="pm-item" onclick="hidePlusMenu();openScanPage()">
+      <span class="pm-ic">⌗</span>扫一扫</div>
+    <div class="pm-item" onclick="hidePlusMenu();openAddFriendEntry()">
+      <span class="pm-ic">＋</span>添加好友</div>
+  </div>
+
+  <div class="shell">
+    <div class="sb-backdrop" id="sbBackdrop" onclick="closeSidebarMobile()"></div>
+    <aside class="sidebar" id="sidebar">
+      <div class="sb-head">
+        <button class="sb-avatar" id="sbMeAv" title="个人信息（点击或从左向右滑动）" onclick="openMyInfo()"></button>
+        <div class="sb-head-title" id="sbTitle">KiteChat</div>
+        <div class="sb-head-right">
+          <button class="theme-ic" id="themeBtn" onclick="cycleTheme()" title="切换主题">◐</button>
+          <button class="sb-icon-btn" title="添加" onclick="togglePlusMenu(this)" style="font-weight:700">＋</button>
+        </div>
+      </div>
+
+      <div class="sb-tabs">
+        <div class="sb-tab active" id="tabChat" onclick="switchTab('chat')">会话</div>
+        <div class="sb-tab" id="tabFriend" onclick="switchTab('friends')">好友<span id="reqBadge"></span></div>
+      </div>
+
+      <!-- chat tab -->
+      <div id="chatTab" style="display:flex;flex-direction:column;flex:1;min-height:0">
+        <button class="new-chat" onclick="createSession()">＋ 新建对话</button>
+        <div class="sb-list" id="sessionList"></div>
+      </div>
+
+      <!-- friends tab -->
+      <div id="friendTab" style="display:none;flex-direction:column;flex:1;min-height:0">
+        <div class="add-friend-bar">
+          <input id="faUser" placeholder="输入用户名添加好友" onkeydown="if(event.key==='Enter')addFriend()">
+          <button class="abtn small" onclick="addFriend()">添加</button>
+        </div>
+        <div class="sb-list" id="friendList"></div>
+      </div>
+
+    </aside>
+
+    <main class="chat-pane" id="chatPane">
+      <div class="chat-empty" id="chatEmpty" onclick="chatEmptyTapped()">
+        <img class="big" src="logo.png" alt="">
+        <h2>开始你的对话</h2>
+        <p id="chatEmptyHint">在左侧新建 AI 对话，或从好友列表发起私聊。<br>所有消息经 OneBot V11 协议实时中转。</p>
+      </div>
+
+      <div id="chatBox" style="display:none;flex-direction:column;height:100%">
+        <div class="chat-head">
+          <button class="mobile-back" onclick="backHome()">←</button>
+          <div class="av" id="headAv">AI</div>
+          <div class="t">
+            <div class="n"><span id="headName">新对话</span><span class="sub" id="headSub"></span></div>
+            <div class="typing-tip" id="typingTip"></div>
+          </div>
+          <button class="icon-btn" id="headRename" title="重命名" onclick="renameSession()">✎</button>
+        </div>
+        <div class="msg-area" id="msgArea"></div>
+        <div class="composer">
+          <div class="composer-box">
+            <textarea id="msgInput" rows="1" placeholder="输入消息，Enter 发送，Shift+Enter 换行"></textarea>
+            <div class="composer-bar">
+              <span class="composer-hint">OneBot V11 · 实时同步</span>
+              <button class="send-btn" id="sendBtn" onclick="sendMessage()">发送</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- mobile bottom tab bar (会话 / 好友) -->
+  <div class="bottom-bar" id="bottomBar">
+    <button class="bb-btn active" id="bbChat" onclick="switchTab('chat')">会话</button>
+    <button class="bb-btn" id="bbFriend" onclick="switchTab('friends')">好友<span id="bbReqBadge"></span></button>
+  </div>
+</div>
+
+<!-- forward detail modal -->
+<div class="modal-mask" id="fwdModal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <div class="modal-h"><span id="fwdTitle">合并转发</span><button class="x" onclick="document.getElementById('fwdModal').style.display='none'">✕</button></div>
+    <div class="modal-b"><div class="fwd-full" id="fwdBody"></div></div>
+  </div>
+</div>
+
+<!-- ======================= SCAN PAGE ======================= -->
+<div class="overlay-page" id="scanPage" style="display:none">
+  <div class="op-head"><button class="op-back" onclick="closeScanPage()">←</button><div class="op-title">扫一扫</div><div style="width:34px"></div></div>
+  <div class="scan-body">
+    <div class="scan-frame" id="scanFrame">
+      <video id="scanVideo" playsinline muted></video>
+      <canvas id="scanCanvas" style="display:none"></canvas>
+      <div class="scan-corner tl"></div><div class="scan-corner tr"></div>
+      <div class="scan-corner bl"></div><div class="scan-corner br"></div>
+      <div class="scan-line"></div>
+    </div>
+    <div class="scan-tip" id="scanTip">将对方的名片二维码对准取景框</div>
+    <div class="scan-actions">
+      <button class="abtn small ghost" onclick="openMyQrPage()">我的二维码</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= MY QR PAGE ======================= -->
+<div class="overlay-page" id="myQrPage" style="display:none">
+  <div class="op-head"><button class="op-back" onclick="closeMyQrPage()">←</button><div class="op-title">我的二维码</div><div style="width:34px"></div></div>
+  <div class="myqr-body">
+    <div class="myqr-card">
+      <div class="myqr-me">
+        <div class="av" id="qrAv" style="width:44px;height:44px;font-size:18px">?</div>
+        <div class="n" id="qrName">…</div>
+      </div>
+      <div class="myqr-box" id="myQrBox"></div>
+      <div class="myqr-tip">对方在「扫一扫」中扫此二维码，可查看你的主页并添加好友</div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= USER PROFILE PAGE ======================= -->
+<div class="overlay-page" id="profilePage" style="display:none">
+  <div class="op-head"><button class="op-back" onclick="closeProfilePage()">←</button><div class="op-title">个人主页</div><div style="width:34px"></div></div>
+  <div class="profile-body">
+    <div class="profile-card">
+      <div class="av big" id="pfAv">?</div>
+      <div class="pf-nick" id="pfNick">…</div>
+      <div class="pf-sub" id="pfSub"></div>
+      <div class="pf-status" id="pfStatus"></div>
+      <button class="abtn" id="pfAddBtn" onclick="addFriendFromProfile()" style="display:none">加为好友</button>
+      <button class="abtn wide-chat" id="pfChatBtn" onclick="chatFromProfile()" style="display:none">去聊天</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= MY INFO PAGE ======================= -->
+<div class="overlay-page" id="myInfoPage">
+  <div class="op-head"><button class="op-back" onclick="closeMyInfoPage()">←</button><div class="op-title">个人信息</div><div style="width:34px"></div></div>
+  <div class="myinfo-body">
+  <div class="myinfo-card">
+    <div class="av-wrap" onclick="showAvatarMenu()">
+      <div class="av big" id="miAv">?</div>
+      <span class="av-cam" title="更换头像">✎</span>
+    </div>
+    <div class="av-tip">点击头像更换（拍照或从相册选择）</div>
+    <input type="file" id="avatarFile" accept="image/*" style="display:none" onchange="onAvatarPicked(this)">
+      <div class="pf-nick" id="miNick">…</div>
+      <div class="pf-sub" id="miSub"></div>
+      <div class="mi-row"><span class="k">用户名</span><span class="v" id="miUser">…</span></div>
+      <div class="mi-row"><span class="k">邮箱</span><span class="v" id="miEmail">…</span></div>
+    </div>
+    <div class="mi-actions">
+      <button class="abtn ghost" onclick="openNickEdit()">修改昵称</button>
+      <button class="abtn ghost" onclick="switchAccount()">切换账号</button>
+      <button class="abtn danger" onclick="logout()">退出账号</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= ACCOUNT SWITCH PAGE ======================= -->
+<div class="overlay-page" id="accountSwitchPage">
+  <div class="op-head">
+    <button class="op-back" onclick="closeAccountPage()">←</button>
+    <div class="op-title">切换账号</div>
+    <button class="op-manage" id="acctManageBtn" onclick="toggleAccountManage()">管理</button>
+  </div>
+  <div class="acct-body">
+    <div class="acct-hint">已登录的账号可快速切换；管理模式下可删除不需要的账号。</div>
+    <div class="acct-list" id="acctList"></div>
+    <button class="abtn ghost acct-add" onclick="addAccountFlow()">＋ 添加账号</button>
+  </div>
+</div>
+
+<!-- nickname edit modal -->
+<div class="modal-mask" id="nickModal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <div class="modal-h"><span>修改昵称</span><button class="x" onclick="document.getElementById('nickModal').style.display='none'">✕</button></div>
+    <div class="modal-b">
+      <div class="afield"><label>新昵称（2-20 位）</label><input id="nickInput" maxlength="20" placeholder="输入新昵称"></div>
+      <button class="abtn" onclick="saveNickname()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- session rename modal (replaces the native prompt that leaks the URL) -->
+<div class="modal-mask" id="renameModal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <div class="modal-h"><span>重命名会话</span><button class="x" onclick="document.getElementById('renameModal').style.display='none'">✕</button></div>
+    <div class="modal-b">
+      <div class="afield"><label>会话名称</label><input id="renameInput" maxlength="30" placeholder="输入会话名称"></div>
+      <button class="abtn" onclick="saveRenameSession()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- delete saved account confirm modal -->
+<div class="modal-mask" id="delAcctModal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <div class="modal-h"><span>删除账号</span><button class="x" onclick="document.getElementById('delAcctModal').style.display='none'">✕</button></div>
+    <div class="modal-b">
+      <p style="margin:0 0 12px;color:var(--muted);font-size:13px">将从本机删除该账号的快捷切换记录（不会注销账号本身）。确定删除</p>
+      <p style="margin:0 0 16px;font-weight:600" id="delAcctName"></p>
+      <button class="abtn danger" onclick="confirmDelAccount()">删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- in-app self-update dialog (Android APK) -->
+<div class="modal-mask" id="updateModal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <div class="modal-h"><span id="updateTitle">发现新版本</span><button class="x" onclick="cancelUpdate()">✕</button></div>
+    <div class="modal-b">
+      <div id="updateInfo" style="font-size:13.5px;color:var(--muted);line-height:1.6"></div>
+      <div class="progress" id="updateProg" style="display:none;margin-top:12px"><div id="updateBar"></div></div>
+      <div id="updatePct" style="display:none;font-size:12px;color:var(--muted);margin-top:4px"></div>
+      <div style="display:flex;gap:10px;margin-top:16px">
+        <button class="abtn" id="updateBtn" style="flex:1" onclick="doUpdate()">下载更新</button>
+        <button class="abtn" id="updateCancelBtn" style="flex:1;background:var(--panel2);color:var(--text)" onclick="cancelUpdate()">取消</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="vendor/qrcode.js"></script>
+<script src="vendor/jsQR.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

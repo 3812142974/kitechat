@@ -1,0 +1,33 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.kitechat.client'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.kitechat.client"
+        minSdk 24
+        targetSdk 35
+        versionCode 6
+        versionName "1.6.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    // align all kotlin-stdlib artifacts to one version (fixes duplicate class
+    // between kotlin-stdlib 1.8.x and kotlin-stdlib-jdk8 1.6.x from appcompat)
+    implementation(platform("org.jetbrains.kotlin:kotlin-bom:1.8.22"))
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+}
