@@ -11,7 +11,7 @@ import aiohttp
 
 BASE = "http://127.0.0.1:8920"
 WS = "ws://127.0.0.1:8920/ws"
-DB = "d:/bot/KiteChat/data/kitechat.db"
+DB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "kitechat.db")
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 6
 SUFFIX = str(int(time.time()))[-6:]
 

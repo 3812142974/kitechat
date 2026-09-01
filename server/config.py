@@ -14,7 +14,7 @@ from urllib.parse import urlparse
 from . import db as dbmod
 
 APP_NAME = "KiteChat"
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # d:/bot/KiteChat
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 项目根目录
 DATA_DIR = os.path.join(ROOT, "data")
 EXPORT_DIR = os.path.join(ROOT, "exports")
 CLIENT_WEB_DIR = os.path.join(ROOT, "client", "web")

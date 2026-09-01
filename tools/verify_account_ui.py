@@ -15,10 +15,24 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import aiohttp
 
-CHROME = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+CHROME = os.environ.get("CHROME_PATH", "")
+if not CHROME:
+    # 跨平台回退：依次探测 Chrome / Edge 常见安装位置
+    _cands = []
+    for _p in (r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+               r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+               r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+               r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+               "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"):
+        if os.path.exists(_p):
+            _cands.append(_p)
+    if _cands:
+        CHROME = _cands[0]
+    else:
+        print("[提示] 未找到 Chrome/Edge，请设置环境变量 CHROME_PATH=<浏览器路径> 后重试")
 APP = "http://127.0.0.1:8920"
 DB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "kitechat.db")
-SHOTS = r"C:\Users\Administrator\workspace\kc_shots"
+SHOTS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "kc_shots")
 UNAME = "browsertest1"
 PASSWORD = "TestPass123"
 

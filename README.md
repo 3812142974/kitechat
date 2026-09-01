@@ -1,12 +1,12 @@
 # KiteChat
 
-**基于 OneBot V11 协议的私有化 AI 聊天双向通信系统**
+> **一句话说明**：把你的 AI 机器人（基于 OneBot V11，如 AstrBot / NapCat / go-cqhttp）变成一个**可注册登录、多会话、有好友聊天**的私有聊天应用。服务端一键部署，产出 Windows EXE 与 Android APK，体验对标豆包 / DeepSeek / QQ，全程不走第三方平台。
 
-服务端独立部署 + 多端客户端（Windows EXE / Android APK），
-体验对标豆包 / DeepSeek / QQ，全程 OneBot V11 标准协议通信。
+**核心特点**：服务端独立部署 + 多端客户端（Windows EXE / Android APK），
+全程 OneBot V11 标准协议通信，与各 QQ 机器人框架无缝对接。
 
 ```
-d:/bot/KiteChat/
+KiteChat/            # 本仓库根目录
 ├── run.py                  # 服务端启动入口
 ├── requirements.txt
 ├── server/                 # 服务端核心（aiohttp 单端口：HTTP API + 客户端WS + OneBot反向WS + WebUI）
@@ -34,7 +34,8 @@ d:/bot/KiteChat/
 ## 快速开始（服务端）
 
 ```bash
-cd d:/bot/KiteChat
+# 克隆后进入项目目录（本仓库根目录）
+cd KiteChat
 # 方式一（推荐，uv 管理，依赖锁定在 uv.lock）：
 uv venv .venv --python 3.11
 uv sync                          # 按 pyproject.toml + uv.lock 精确安装
@@ -83,12 +84,16 @@ OneBot V11 :  ws://<局域网IP>:8920/onebot      ← Bot 反向 WS 接入
 | Android | 原生 WebView 壳 + Gradle + apksigner | `exports/android/KiteChat-android-*.apk`（直接安装） |
 
 导出前需保证：
-- 服务端运行环境装有 Python 3.11 + aiohttp/pywebview/pyinstaller（本机已装）
-- Android 构建需要 JDK 17+ 与 Android SDK。本机工具链（不在项目目录内，D 盘共享）：
-  `D:\Android\sdk`（platform-tools / android-35 / build-tools 35.0.0）
-  `D:\Android\gradle-home`（Gradle 依赖缓存）
-  `D:\Android\gradle-8.10.2`（Gradle 发行版）
-  也可用环境变量 ANDROID_HOME / GRADLE_USER_HOME 指向别处。
+- 服务端运行环境装有 Python 3.11 + aiohttp/pywebview/pyinstaller。
+  若未安装，可先执行：`pip install -r requirements.txt`
+- Android 构建需要 **JDK 17+** 与 **Android SDK**。位置通过自动检测确定（无需手动指定）：
+  - 检测顺序：环境变量 `ANDROID_HOME` → `ANDROID_SDK_ROOT` → 常见安装路径（LocalAppData / 用户目录 / 盘符根目录下的 Android/Sdk）；
+    JDK 同理：`JAVA_HOME` → `java` 命令解析 → 常见 `Program Files/Java` 路径。
+  - 已安装：运行 `tools/setup_android_sdk.sh`，脚本会把检测到的 `sdk.dir` 写入 `client/android/local.properties`，无需手动填路径。
+  - 未安装：按以下链接下载配置——
+    - Android 命令行工具（SDK）：<https://developer.android.com/studio#command-line-tools-only> ，安装后设置 `ANDROID_HOME`
+    - OpenJDK 17+：<https://adoptium.net/temurin/releases/?version=17> 或 <https://www.oracle.com/java/technologies/downloads/> ，安装后设置 `JAVA_HOME`
+    - 也可自行指定：`export ANDROID_HOME=<你的sdk路径>`、`export JAVA_HOME=<你的jdk路径>`
 - 首次 APK 构建约 3-8 分钟（Gradle 下载依赖），之后增量很快。
 
 注入机制：导出时把 `{"ws_address": "...", "server_url": "...", "app_name": "..."}`
