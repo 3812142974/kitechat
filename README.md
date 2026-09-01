@@ -86,15 +86,26 @@ OneBot V11 :  ws://<局域网IP>:8920/onebot      ← Bot 反向 WS 接入
 导出前需保证：
 - 服务端运行环境装有 Python 3.11 + aiohttp/pywebview/pyinstaller。
   若未安装，可先执行：`pip install -r requirements.txt`
-- Android 构建需要 **JDK 17+** 与 **Android SDK**。位置通过自动检测确定（无需手动指定）：
-  - 检测顺序：环境变量 `ANDROID_HOME` → `ANDROID_SDK_ROOT` → 常见安装路径（LocalAppData / 用户目录 / 盘符根目录下的 Android/Sdk）；
-    JDK 同理：`JAVA_HOME` → `java` 命令解析 → 常见 `Program Files/Java` 路径。
-  - 已安装：运行 `tools/setup_android_sdk.sh`，脚本会把检测到的 `sdk.dir` 写入 `client/android/local.properties`，无需手动填路径。
-  - 未安装：按以下链接下载配置——
-    - Android 命令行工具（SDK）：<https://developer.android.com/studio#command-line-tools-only> ，安装后设置 `ANDROID_HOME`
-    - OpenJDK 17+：<https://adoptium.net/temurin/releases/?version=17> 或 <https://www.oracle.com/java/technologies/downloads/> ，安装后设置 `JAVA_HOME`
-    - 也可自行指定：`export ANDROID_HOME=<你的sdk路径>`、`export JAVA_HOME=<你的jdk路径>`
-- 首次 APK 构建约 3-8 分钟（Gradle 下载依赖），之后增量很快。
+- Android 构建需要 **JDK 17+** 与 **Android SDK**。**导出 APK 时才检查，不影响服务端启动**：
+  导出一键脚本 `tools/setup_android_sdk.sh` 会自动完成 **检测 → 缺失自动安装 → 写入配置** 全流程：
+  - **检测顺序**：
+    - SDK：环境变量 `ANDROID_HOME` → `ANDROID_SDK_ROOT` → 项目内 `tools/android-sdk` → 常见路径（LocalAppData / 用户目录 / C:或D:根目录的 Android/Sdk）
+    - JDK：环境变量 `JAVA_HOME` → `java` 命令解析 → 项目内 `tools/jdk` → 常见 `Program Files/Java` / `Eclipse Adoptium` 路径
+  - **检测到**：自动把 `sdk.dir` 写入 `client/android/local.properties`，无需手动填。
+  - **未检测到（自动安装）**：脚本直接在**项目内**下载安装，无需用户动手：
+    - Android SDK → 装到 `tools/android-sdk/`（自动安装 `platform-tools`、`platforms;android-35`、`build-tools;35.0.0`）
+    - JDK 17（Temurin）→ 装到 `tools/jdk/`
+    - 安装后自动写配置，可直接开始构建。
+- **两种方式任选其一**：
+  - **① 自动安装**（推荐）：运行 `bash tools/setup_android_sdk.sh`，脚本检测不到就自动装到项目内。
+  - **② 手动安装**：按官网链接自行下载并设置环境变量——Android 命令行工具 <https://developer.android.com/studio#command-line-tools-only> 、OpenJDK 17+ <https://adoptium.net/temurin/releases/?version=17> ，然后 `export ANDROID_HOME=<你的sdk路径>`、`export JAVA_HOME=<你的jdk路径>`。
+
+| 依赖 | 安装到 | 大约占用空间 |
+|---|---|---|
+| Android SDK（commandlinetools + platform-tools + android-35 + build-tools 35.0.0） | `tools/android-sdk/` | **约 1.5~2.5 GB** |
+| JDK 17（Temurin） | `tools/jdk/` | **约 200~300 MB** |
+
+> 提示：以上目录均已被 `.gitignore` 排除，不会推送进仓库。首次 APK 构建约 3-8 分钟（Gradle 下载依赖），之后增量很快；若你想手动装到别处，只需设置好 `ANDROID_HOME` / `JAVA_HOME` 即可。
 
 注入机制：导出时把 `{"ws_address": "...", "server_url": "...", "app_name": "..."}`
 写入混淆后的 `config.bin`（XOR+Base64，客户端运行时解码）。客户端文件里不含明文服务器地址，解包只能看到一串乱码。EXE 与 APK 启动时自动解码并连接。

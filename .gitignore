@@ -7,7 +7,10 @@ exports/
 build/
 tools/uv-cache/
 tools/android-sdk/
+tools/jdk/
 tools/gradle-home/
+tools/clt.zip
+tools/jdk.zip
 tools/icon-cand*.png
 tools/*.zip
 client/android/.gradle/

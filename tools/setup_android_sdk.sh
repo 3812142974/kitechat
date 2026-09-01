@@ -1,110 +1,196 @@
 #!/usr/bin/env bash
-# Android SDK / JDK 环境自动检测与引导安装脚本（通用版，无本机硬编码）
-# 用途：
-#   1. 自动检测已安装的 Android SDK 与 JDK 位置
-#   2. 未检测到时，给出官网下载链接，引导用户安装
-#   3. 检测结果写入 Android 构建需要的配置（local.properties / ANDROID_HOME / JAVA_HOME）
-set -e
+# KiteChat Android 环境一键准备脚本（通用版，无本机硬编码路径）
+#
+# 三步：
+#   1. 检测 Android SDK 与 JDK —— 顺序：环境变量 -> 项目内 tools/ -> 常见全局路径
+#   2. 若缺失：自动下载并安装到【项目内】 tools/android-sdk 与 tools/jdk
+#      （SDK 装 platform-tools / platforms;android-35 / build-tools;35.0.0，JDK 用 Temurin 17）
+#   3. 写入 client/android/local.properties (sdk.dir) 并打印导出用的环境变量
+#
+# 用法：  bash tools/setup_android_sdk.sh
+# 网络：  需要能访问 dl.google.com（SDK）与 Adoptium / 镜像（JDK）
+set -u
 
-# ---------- 1. 检测 Android SDK ----------
+# ---------- 工具 ----------
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"          # 项目根
+TOOLS_DIR="$ROOT/tools"
+ANDROID_DIR="$ROOT/client/android"
+LOCAL_PROPS="$ANDROID_DIR/local.properties"
+
+SDK_LOCAL="$TOOLS_DIR/android-sdk"            # 项目内 SDK
+JDK_LOCAL="$TOOLS_DIR/jdk"                     # 项目内 JDK
+
+SDK_PLATFORMS="platforms;android-35"
+SDK_BUILD_TOOLS="build-tools;35.0.0"
+SDK_PLATFORM_TOOLS="platform-tools"
+
+# 下载源（可按需改镜像）
+SDK_CLT_URL="https://dl.google.com/android/repository/commandlinetools-win-11076708_latest.zip"
+JDK_ZIP_URL="https://api.adoptium.net/v3/binary/latest/17/ga/windows/x64/jdk/hotspot/normal/eclipse"
+
+log()  { printf '\033[1;34m[env]\033[0m %s\n' "$*"; }
+ok()   { printf '\033[1;32m[✓]\033[0m %s\n' "$*"; }
+warn() { printf '\033[1;33m[!]\033[0m %s\n' "$*"; }
+die()  { printf '\033[1;31m[x]\033[0m %s\n' "$*" >&2; exit 1; }
+
+has_cmd() { command -v "$1" >/dev/null 2>&1; }
+
+# ---------- 1. 检测 ----------
 detect_sdk() {
-  # 优先读环境变量
+  local p
   for var in ANDROID_HOME ANDROID_SDK_ROOT; do
-    if [ -n "${!var}" ] && [ -d "${!var}" ]; then
-      echo "${!var}"
-      return 0
-    fi
+    p="${!var:-}"
+    [ -n "$p" ] && [ -d "$p" ] && { echo "$p"; return 0; }
   done
-  # 常见安装位置（无硬编码特定盘符，逐个探测）
+  [ -d "$SDK_LOCAL" ] && { echo "$SDK_LOCAL"; return 0; }
   for p in \
-    "$LOCALAPPDATA/Android/Sdk" \
-    "$HOME/Android/Sdk" \
-    "/c/Android/Sdk" \
-    "/d/Android/Sdk" \
-    "/c/Users/$USER/AppData/Local/Android/Sdk"; do
-    if [ -d "$p" ]; then
-      echo "$p"
-      return 0
-    fi
+    "$LOCALAPPDATA/Android/Sdk" "$HOME/Android/Sdk" \
+    "/c/Android/Sdk" "/d/Android/Sdk"; do
+    [ -d "$p" ] && { echo "$p"; return 0; }
   done
   return 1
 }
 
-# ---------- 2. 检测 JDK ----------
 detect_jdk() {
-  # 优先环境变量
-  if [ -n "$JAVA_HOME" ] && [ -d "$JAVA_HOME" ]; then
-    echo "$JAVA_HOME"
-    return 0
+  local p jbin
+  p="${JAVA_HOME:-}"
+  [ -n "$p" ] && [ -d "$p" ] && { echo "$p"; return 0; }
+  # 项目内 JDK：解压后形如 tools/jdk/<jdk-17.x>/bin/java.exe
+  local cand="$JDK_LOCAL"
+  if [ -d "$cand" ]; then
+    local found=""
+    for inner in "$cand"/* ; do
+      [ -f "$inner/bin/java.exe" ] && found="$inner" && break
+    done
+    [ -n "$found" ] || found="$cand"
+    if [ -f "$found/bin/java.exe" ]; then echo "$found"; return 0; fi
   fi
-  # 命令可用则解析
-  if command -v java >/dev/null 2>&1; then
-    # 尝试从 java 可执行文件反推 JAVA_HOME
+  if has_cmd java; then
     jbin="$(command -v java)"
-    if [ -x "$(dirname "$jbin")" ]; then
-      echo "$(cd "$(dirname "$(dirname "$jbin")")" && pwd)"
-      return 0
-    fi
+    jd="$(cd "$(dirname "$jbin")/.." && pwd)"
+    [ -f "$jd/bin/java.exe" ] && { echo "$jd"; return 0; }
   fi
-  # 常见 JDK 位置（探测）
-  for p in "$LOCALAPPDATA/Programs"/*/bin \
-    /c/Program\ Files/Java/* \
-    /d/Program\ Files/Java/*; do
-    if [ -d "$p" ]; then
-      echo "$p"
-      return 0
-    fi
+  for p in "$LOCALAPPDATA/Programs"/* "$LOCALAPPDATA/Programs"/*/* \
+    /c/Program\ Files/Java/* /d/Program\ Files/Java/* /c/Program\ Files/Eclipse\ Adoptium/*; do
+    [ -f "$p/bin/java.exe" ] && { echo "$p"; return 0; }
   done
   return 1
 }
 
-SDK_ROOT="$(detect_sdk || true)"
-JAVA_ROOT="$(detect_jdk || true)"
+# ---------- 2. 安装（缺失时） ----------
+download() {  # $1=url  $2=out
+  log "下载 $1"
+  curl -fL --retry 3 --connect-timeout 20 -o "$2" "$1" || die "下载失败: $1"
+}
 
-echo "=============================================="
-echo " Android SDK / JDK 环境检测"
-echo "=============================================="
-if [ -n "$SDK_ROOT" ]; then
-  echo "[✓] Android SDK : $SDK_ROOT"
-else
-  echo "[✗] 未检测到 Android SDK"
-  echo "    请安装 Android 命令行工具："
-  echo "      https://developer.android.com/studio#command-line-tools-only"
-  echo "    安装后设置环境变量 ANDROID_HOME，或运行："
-  echo "      export ANDROID_HOME=<你的sdk路径>"
-fi
-
-if [ -n "$JAVA_ROOT" ]; then
-  echo "[✓] JDK         : $JAVA_ROOT"
-else
-  echo "[✗] 未检测到 JDK（Android 构建需要 JDK 17+）"
-  echo "    请下载安装 OpenJDK："
-  echo "      https://adoptium.net/temurin/releases/?version=17"
-  echo "    或 https://www.oracle.com/java/technologies/downloads/"
-  echo "    安装后设置环境变量 JAVA_HOME"
-fi
-
-# 将检测结果写入 Android 构建配置（若存在）
-ANDROID_PROJ="$(dirname "$0")/../client/android"
-if [ -n "$SDK_ROOT" ]; then
-  mkdir -p "$ANDROID_PROJ"
-  # 写入 local.properties (Android 标准 sdk.dir 配置)
-  if [ -f "$ANDROID_PROJ/local.properties" ]; then
-    sed -i "s|^sdk.dir=.*|sdk.dir=$(echo "$SDK_ROOT" | sed 's|/|\\\\|g')|" "$ANDROID_PROJ/local.properties" 2>/dev/null \
-      || echo "sdk.dir=$(echo "$SDK_ROOT" | sed 's|/|\\\\|g')" >> "$ANDROID_PROJ/local.properties"
+install_sdk() {
+  local sdk_root="$SDK_LOCAL"
+  if [ -f "$sdk_root/cmdline-tools/latest/bin/sdkmanager.bat" ]; then
+    ok "项目内 SDK 已存在: $sdk_root"
   else
-    echo "sdk.dir=$(echo "$SDK_ROOT" | sed 's|/|\\\\|g')" > "$ANDROID_PROJ/local.properties"
+    log "在项目内安装 Android SDK 到 tools/android-sdk ..."
+    mkdir -p "$sdk_root"
+    local ztmp="$TOOLS_DIR/clt.zip"
+    download "$SDK_CLT_URL" "$ztmp"
+    ( cd "$sdk_root" && unzip -q -o "$ztmp" || {
+        warn "unzip 不可用，改用 PowerShell 解压"
+        powershell -NoProfile -Command \
+          "Expand-Archive -Force -LiteralPath '$(cygpath -w "$ztmp")' -DestinationPath '$(cygpath -w "$sdk_root")'"
+      } )
+    rm -f "$ztmp"
+    # commandlinetools zip 顶层是 cmdline-tools 目录 → 移到 cmdline-tools/latest
+    if [ -d "$sdk_root/cmdline-tools" ] && [ ! -d "$sdk_root/cmdline-tools/latest" ]; then
+      mv "$sdk_root/cmdline-tools" "$sdk_root/cmdline-tools_tmp"
+      mkdir -p "$sdk_root/cmdline-tools"
+      mv "$sdk_root/cmdline-tools_tmp" "$sdk_root/cmdline-tools/latest"
+    fi
   fi
-  echo "[✓] 已将 sdk.dir 写入 client/android/local.properties"
-fi
+  [ -f "$sdk_root/cmdline-tools/latest/bin/sdkmanager.bat" ] || {
+    # 老版本目录层级：cmdline-tools/latest/bin/sdkmanager.bat 兜底查找
+    local sm
+    sm="$(find "$sdk_root" -iname 'sdkmanager.bat' 2>/dev/null | head -1)"
+    [ -n "$sm" ] || die "SDK cmdline-tools 安装失败（未找到 sdkmanager）"
+  }
+  local sdkmanager="$sdk_root/cmdline-tools/latest/bin/sdkmanager.bat"
+  log "接受 SDK 许可 + 安装组件: $SDK_PLATFORM_TOOLS / $SDK_PLATFORMS / $SDK_BUILD_TOOLS"
+  ( cd "$sdk_root"
+    yes 2>/dev/null | "$sdkmanager" --licenses >/dev/null 2>&1 || true
+    "$sdkmanager" "$SDK_PLATFORM_TOOLS" "$SDK_PLATFORMS" "$SDK_BUILD_TOOLS" >/dev/null 2>&1 \
+      || die "sdkmanager 安装组件失败"
+  )
+  ok "SDK 组件安装完成: $sdk_root"
+  echo "$sdk_root"
+}
 
+install_jdk() {
+  local jdk_root="$JDK_LOCAL"
+  # 已解压好（含 bin/java.exe）
+  local found=""
+  if [ -d "$jdk_root" ]; then
+    for inner in "$jdk_root"/*; do
+      [ -f "$inner/bin/java.exe" ] && found="$inner" && break
+    done
+    [ -n "$found" ] && { ok "项目内 JDK 已存在: $found"; echo "$found"; return; }
+    # 根目录本身即是 jdk
+    if [ -f "$jdk_root/bin/java.exe" ]; then ok "项目内 JDK 已存在: $jdk_root"; echo "$jdk_root"; return; fi
+  fi
+  log "在项目内安装 JDK 17 到 tools/jdk ..."
+  mkdir -p "$jdk_root"
+  local ztmp="$TOOLS_DIR/jdk.zip"
+  download "$JDK_ZIP_URL" "$ztmp"
+  ( cd "$jdk_root" && unzip -q -o "$ztmp" || {
+      warn "unzip 不可用，改用 PowerShell 解压"
+      powershell -NoProfile -Command \
+        "Expand-Archive -Force -LiteralPath '$(cygpath -w "$ztmp")' -DestinationPath '$(cygpath -w "$jdk_root")'"
+    } )
+  rm -f "$ztmp"
+  for inner in "$jdk_root"/*; do
+    [ -f "$inner/bin/java.exe" ] && found="$inner" && break
+  done
+  if [ -z "$found" ] && [ -f "$jdk_root/bin/java.exe" ]; then found="$jdk_root"; fi
+  [ -n "$found" ] || die "JDK 安装失败（未找到 bin/java.exe）"
+  ok "JDK 安装完成: $found"
+  echo "$found"
+}
+
+# ---------- main ----------
+SDK_ROOT="$(detect_sdk || true)"
+JDK_ROOT="$(detect_jdk || true)"
+
+echo "======================================================"
+echo " KiteChat Android 构建环境准备"
+echo "======================================================"
+[ -n "$SDK_ROOT" ] && ok "Android SDK : $SDK_ROOT" || {
+  warn "未检测到 Android SDK -> 自动安装到项目内"
+  SDK_ROOT="$(install_sdk)"
+}
+[ -n "$JDK_ROOT" ] && ok "JDK         : $JDK_ROOT" || {
+  warn "未检测到 JDK -> 自动安装到项目内"
+  JDK_ROOT="$(install_jdk)"
+}
+
+# ---------- 3. 写入配置 ----------
+mkdir -p "$ANDROID_DIR"
+# local.properties 用正斜杠（Gradle 兼容，Windows 也接受）
+SDK_DIR_SLASH="$(echo "$SDK_ROOT" | sed 's|\\\\|/|g')"
+if grep -qs '^sdk.dir=' "$LOCAL_PROPS" 2>/dev/null; then
+  sed -i "s|^sdk.dir=.*|sdk.dir=$SDK_DIR_SLASH|" "$LOCAL_PROPS"
+else
+  echo "sdk.dir=$SDK_DIR_SLASH" >> "$LOCAL_PROPS"
+fi
+ok "已写入 $LOCAL_PROPS  ->  sdk.dir=$SDK_DIR_SLASH"
+
+# 缺组件提示（SDK 已装但缺 android-35 时）
 if [ -n "$SDK_ROOT" ] && [ ! -d "$SDK_ROOT/platforms/android-35" ]; then
-  echo ""
-  echo "[提示] 检测到 SDK 但缺少 android-35 / build-tools 35.0.0，请运行以下命令补装："
-  echo "  \$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager.bat \"platform-tools\" \"platforms;android-35\" \"build-tools;35.0.0\""
+  warn "SDK 缺少 android-35 / build-tools 35.0.0，请运行："
+  warn "  $SDK_ROOT/cmdline-tools/latest/bin/sdkmanager.bat \"$SDK_PLATFORM_TOOLS\" \"$SDK_PLATFORMS\" \"$SDK_BUILD_TOOLS\""
 fi
 
-echo ""
-echo "=============================================="
-echo " 环境检测完成。若上两项均为 [✓] 即可进行 Android 构建。"
-echo "=============================================="
+echo "------------------------------------------------------"
+echo " 构建/导出时设置以下环境变量（或写入服务端配置）："
+echo "   export ANDROID_HOME=\"$SDK_ROOT\""
+echo "   export ANDROID_SDK_ROOT=\"$SDK_ROOT\""
+echo "   export JAVA_HOME=\"$JDK_ROOT\""
+echo "------------------------------------------------------"
+echo " 环境准备完成 ✅ 现在可进行 Android APK 构建。"

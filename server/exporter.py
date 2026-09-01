@@ -41,13 +41,26 @@ def _obfuscate_into_bin(payload: dict, out_path: str) -> None:
 
 
 # --------------------------------------------------------------- tool detect
+_SDK_CACHE = {"v": None}
+_JDK_CACHE = {"v": None}
+
+
 def _find_sdk() -> str:
     """Auto-detect Android SDK root. Order:
-    env ANDROID_HOME -> ANDROID_SDK_ROOT -> common install dirs."""
+    env ANDROID_HOME -> ANDROID_SDK_ROOT -> project tools/ -> common dirs.
+    Cached after first call."""
+    if _SDK_CACHE["v"] is not None:
+        return _SDK_CACHE["v"]
     for var in ("ANDROID_HOME", "ANDROID_SDK_ROOT"):
         v = os.environ.get(var, "").strip()
         if v and os.path.isdir(v):
+            _SDK_CACHE["v"] = v
             return v
+    # project-local SDK (installed by tools/setup_android_sdk.sh)
+    proj_local = os.path.join(cfg.ROOT, "tools", "android-sdk")
+    if os.path.isdir(proj_local):
+        _SDK_CACHE["v"] = proj_local
+        return proj_local
     home = os.path.expanduser("~")
     cands = [
         os.path.join(home, "AppData", "Local", "Android", "Sdk"),
@@ -57,34 +70,52 @@ def _find_sdk() -> str:
     ]
     for c in cands:
         if os.path.isdir(c):
+            _SDK_CACHE["v"] = c
             return c
+    _SDK_CACHE["v"] = ""
     return ""
 
 
 def _find_jdk() -> str:
     """Auto-detect JDK home (must contain bin/java.exe). Order:
-    env JAVA_HOME -> java cmd -> common dirs, validating bin/java.exe."""
+    env JAVA_HOME -> java cmd -> project tools/ -> common dirs, validating.
+    Cached after first call."""
+    if _JDK_CACHE["v"] is not None:
+        return _JDK_CACHE["v"]
     v = os.environ.get("JAVA_HOME", "").strip()
     if v:
-        # resolve 'latest' style symlink recursively to a real JDK home
         v = _resolve_jdk_home(v)
         if v:
+            _JDK_CACHE["v"] = v
             return v
     javac = shutil.which("java")
     if javac:
         root = os.path.dirname(os.path.dirname(os.path.abspath(javac)))
         root = _resolve_jdk_home(root)
         if root:
+            _JDK_CACHE["v"] = root
             return root
+    # project-local JDK (installed by tools/setup_android_sdk.sh -> tools/jdk)
+    proj_jdk = os.path.join(cfg.ROOT, "tools", "jdk")
+    if os.path.isdir(proj_jdk):
+        # default dist layout: tools/jdk/<jdk-17.x.y>/bin/java.exe
+        for name in sorted(os.listdir(proj_jdk)):
+            p = os.path.join(proj_jdk, name)
+            r = _resolve_jdk_home(p)
+            if r:
+                _JDK_CACHE["v"] = r
+                return r
+        r = _resolve_jdk_home(proj_jdk)
+        if r:
+            _JDK_CACHE["v"] = r
+            return r
     home = os.path.expanduser("~")
     # candidate *bases*, each enumerated for child dirs (D: first per preference)
     candidate_bases = [
         os.path.join(home, "AppData", "Local", "Programs"),
         r"D:\Program Files\Java",
-        r"D:\Program Files",
         r"C:\Program Files\Eclipse Adoptium",
         r"C:\Program Files\Java",
-        r"C:\Program Files",
         r"C:\Program Files\Microsoft",
     ]
     # collect all valid JDK homes then pick the one with the highest version
@@ -92,26 +123,44 @@ def _find_jdk() -> str:
     for base in candidate_bases:
         if not os.path.isdir(base):
             continue
-        for name in sorted(os.listdir(base)):
+        # avoid enumerating huge unrelated dirs that aren't JDK-ish (slow)
+        try:
+            names = sorted(os.listdir(base))
+        except OSError:
+            continue
+        for name in names:
             p = os.path.join(base, name)
+            if not os.path.isdir(p):
+                continue
+            # quick filter: only bother _resolve_jdk_home on plausible JDK dirs
             jdk = _resolve_jdk_home(p)
             if jdk and jdk not in found:
                 found.append(jdk)
     if found:
-        return _pick_highest_jdk(found)
-    # last resort: search a couple of levels under Program Files for java+javac
+        best = _pick_highest_jdk(found)
+        _JDK_CACHE["v"] = best
+        return best
+    # last resort: search shallowly under Program Files for java+javac
+    # (limited to a small, targeted set; never scan the whole Program Files tree)
     for base in (r"D:\Program Files", r"C:\Program Files", r"C:\Program Files (x86)"):
         if not os.path.isdir(base):
             continue
-        for dirpath, dirnames, filenames in os.walk(base):
-            depth = dirpath[len(base):].count(os.sep)
-            if depth > 2:
-                continue
-            if "java.exe" in filenames and "javac.exe" in filenames:
-                jdk = _resolve_jdk_home(os.path.dirname(dirpath))
-                if jdk and jdk not in found:
-                    found.append(jdk)
-    return _pick_highest_jdk(found)
+        for name in ("Java", "Eclipse Adoptium", "jdk*", "java*", "Microsoft"):
+            import glob
+            for dirpath in glob.glob(os.path.join(base, name)):
+                if not os.path.isdir(dirpath):
+                    continue
+                if os.path.isfile(os.path.join(dirpath, "bin", "java.exe")) \
+                        and os.path.isfile(os.path.join(dirpath, "bin", "javac.exe")):
+                    jdk = _resolve_jdk_home(dirpath)
+                    if jdk and jdk not in found:
+                        found.append(jdk)
+    if found:
+        best = _pick_highest_jdk(found)
+        _JDK_CACHE["v"] = best
+        return best
+    _JDK_CACHE["v"] = ""
+    return ""
 
 
 def _pick_highest_jdk(cands: list[str]) -> str:
@@ -129,10 +178,12 @@ def _pick_highest_jdk(cands: list[str]) -> str:
 
 
 def _resolve_jdk_home(cand: str) -> str:
-    """Return cand if it's a real JDK home (has bin/java.exe), else try to
-    follow symlink-ish 'latest' folders / children. Empty when invalid."""
+    """Return cand if it's a real JDK home (has bin/java.exe AND bin/javac.exe),
+    else try to follow symlink-ish 'latest' folders / children. Empty when invalid.
+    Requiring javac excludes JREs (Android build needs the full JDK)."""
     def is_jdk(p: str) -> bool:
-        return os.path.isfile(os.path.join(p, "bin", "java.exe"))
+        return (os.path.isfile(os.path.join(p, "bin", "java.exe"))
+                and os.path.isfile(os.path.join(p, "bin", "javac.exe")))
     saw: set[str] = set()
 
     def walk(p: str) -> str:
