@@ -445,12 +445,14 @@ def _build_android(job: _Job, ws: str, version: str, scheme: str,
 
     # backup & restore app/build.gradle versionName so we don't touch git tree
     app_build = os.path.join(android_dir, "app", "build.gradle")
-    with open(app_build, "r", encoding="utf-8") as f:
+    with open(app_build, "rb") as f:
         orig_build = f.read()
-    new_build = re.sub(r"versionName \"[\d.]+\"", f'versionName "{version}"', orig_build)
-    new_build = re.sub(r"versionCode \d+", f"versionCode {int(version.replace('.','') or '1')}", new_build)
-    with open(app_build, "w", encoding="utf-8") as f:
-        f.write(new_build)
+    # operate on text; preserve exact original bytes on restore
+    text = orig_build.decode("utf-8")
+    new_text = re.sub(r'versionName "[^"]*"', f'versionName "{version}"', text)
+    new_text = re.sub(r"versionCode \d+", f"versionCode {int(version.replace('.', '') or '1')}", new_text)
+    with open(app_build, "wb") as f:
+        f.write(new_text.encode("utf-8"))
 
     # inject config.bin into android assets/web
     assets_web = os.path.join(android_dir, "app", "src", "main", "assets", "web")
@@ -475,8 +477,8 @@ def _build_android(job: _Job, ws: str, version: str, scheme: str,
     cmd = [gradle, "--no-daemon", "-q", "assembleRelease"]
     res = _run_job_cmd(job, cmd, cwd=android_dir, env=env)
 
-    # restore build.gradle regardless of outcome
-    with open(app_build, "w", encoding="utf-8") as f:
+    # restore build.gradle regardless of outcome (exact original bytes)
+    with open(app_build, "wb") as f:
         f.write(orig_build)
 
     if res != 0:
@@ -541,7 +543,7 @@ def _sign_apk(job: _Job, apk: str) -> str:
     cmd = [
         apksigner, "sign", "--ks", keystore,
         "--ks-pass", f"pass:{passw}",
-        "--key-alias", alias,
+        "--ks-key-alias", alias,
         "--out", signed, apk,
     ]
     env = dict(os.environ)
