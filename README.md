@@ -1,7 +1,5 @@
 # KiteChat
 
-> **一句话说明**：把你的 AI 机器人（基于 OneBot V11，如 AstrBot / NapCat / go-cqhttp）变成一个**可注册登录、多会话、有好友聊天**的私有聊天应用。服务端一键部署，产出 Windows EXE 与 Android APK，体验对标豆包 / DeepSeek / QQ，全程不走第三方平台。
-
 **核心特点**：服务端独立部署 + 多端客户端（Windows EXE / Android APK），
 全程 OneBot V11 标准协议通信，与各 QQ 机器人框架无缝对接。
 
