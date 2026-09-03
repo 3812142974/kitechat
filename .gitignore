@@ -5,6 +5,7 @@ data/
 logs/
 exports/
 build/
+dist/
 tools/uv-cache/
 tools/android-sdk/
 tools/jdk/

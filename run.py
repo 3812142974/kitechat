@@ -8,6 +8,14 @@ import asyncio
 import os
 import sys
 
+# Put the project root on sys.path explicitly. Standard CPython has cwd on
+# path so `from server import ...` works, but the Windows embeddable runtime
+# ships an isolated ._pth where cwd is NOT on sys.path — without this the
+# bundled one-click installer fails to import the `server` package.
+_this_dir = os.path.dirname(os.path.abspath(__file__))
+if _this_dir not in sys.path:
+    sys.path.insert(0, _this_dir)
+
 from server import config as cfg
 from aiohttp import web as _web
 

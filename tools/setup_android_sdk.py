@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import shutil
 import sys
+import tarfile
 import time
 import zipfile
 import urllib.request
@@ -48,15 +49,19 @@ def die(msg):  print("\033[1;31m[x]\033[0m %s" % msg, file=sys.stderr); sys.exit
 if IS_LINUX:
     SDK_CLT_URL = ("https://dl.google.com/android/repository/"
                    "commandlinetools-linux-16111833_latest.zip")
-    JDK_ZIP_URL = ("https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/"
-                   "jdk/hotspot/normal/eclipse")
+    # Oracle 官方 JDK 21 LTS (Linux 为 tar.gz)
+    JDK_URL = ("https://download.oracle.com/java/21/latest/"
+               "jdk-21_linux-x64_bin.tar.gz")
+    JDK_ARCHIVE_IS_TAR = True
     SDKMANAGER = "sdkmanager"           # Linux 无 .bat
     SDKEXE = "java"
 elif IS_WINDOWS:
     SDK_CLT_URL = ("https://dl.google.com/android/repository/"
                    "commandlinetools-win-16111833_latest.zip")
-    JDK_ZIP_URL = ("https://api.adoptium.net/v3/binary/latest/17/ga/windows/x64/"
-                   "jdk/hotspot/normal/eclipse")
+    # Oracle 官方 JDK 21 LTS (Windows 为 zip)
+    JDK_URL = ("https://download.oracle.com/java/21/latest/"
+               "jdk-21_windows-x64_bin.zip")
+    JDK_ARCHIVE_IS_TAR = False
     SDKMANAGER = "sdkmanager.bat"
     SDKEXE = "java.exe"
 else:
@@ -153,6 +158,17 @@ def unzip_zip(src: str, dest: str) -> None:
     with zipfile.ZipFile(src) as z:
         z.extractall(dest)
 
+def _untar(src: str, dest: str) -> None:
+    log("解压 %s -> %s" % (src, dest))
+    os.makedirs(dest, exist_ok=True)
+    # 兼容 tar.gz / tar.bz2 / tar.xz（按扩展名选模式）
+    mode = "r:gz" if src.endswith(".gz") else ("r:bz2" if src.endswith(".bz2")
+                                               else "r:xz" if src.endswith(".xz")
+                                               else "r:*")
+    with tarfile.open(src, mode) as t:
+        # 安全解压（避免路径穿越）
+        t.extractall(dest, filter="data")
+
 # ------------- 安装 -------------
 def install_sdk() -> str:
     sdk_root = SDK_LOCAL
@@ -212,12 +228,15 @@ def install_jdk() -> str:
         if _jdk_has_java(cand):
             ok("项目内 JDK 已存在: %s" % cand)
             return cand
-    log("在项目内安装 JDK 17 到 tools/jdk ...")
+    log("在项目内安装 Oracle JDK 21 到 tools/jdk ...")
     os.makedirs(jdk_root, exist_ok=True)
-    ztmp = os.path.join(TOOLS_DIR, "jdk.zip")
-    download(JDK_ZIP_URL, ztmp)
-    unzip_zip(ztmp, jdk_root)
-    os.remove(ztmp)
+    archive = os.path.join(TOOLS_DIR, "jdk.archive")
+    download(JDK_URL, archive)
+    if JDK_ARCHIVE_IS_TAR:
+        _untar(archive, jdk_root)
+    else:
+        unzip_zip(archive, jdk_root)
+    os.remove(archive)
     for n in sorted(os.listdir(jdk_root)):
         inner = os.path.join(jdk_root, n)
         if _jdk_has_java(inner):
