@@ -150,3 +150,8 @@ OneBot V11 :  ws://<局域网IP>:8920/onebot      ← Bot 反向 WS 接入
 
 认证后双向 JSON：客户端发 `{"op":"message|create_session|history|friend_add|..."}`，
 服务端回 `{"op":"result",...}`，并推送 OneBot 风格事件（详见 `server/protocol.py` 头注）。
+
+## 开源协议
+
+本项目基于 **MIT License** 开源（见 [LICENSE](LICENSE)）。
+允许免费使用、复制、修改、合并、发布、分发、再许可及销售，只需保留版权声明与许可协议。

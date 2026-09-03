@@ -3,6 +3,7 @@ name = "kitechat"
 version = "1.0.0"
 description = "OneBot V11 私有化 AI 聊天双向通信系统（服务端 + Windows/Android 多端客户端）"
 readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.11"
 dependencies = [
     "aiohttp>=3.9",          # 运行必需：HTTP + WebSocket
