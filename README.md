@@ -33,7 +33,7 @@ KiteChat/            # 本仓库根目录
 
 ```bash
 # 克隆后进入项目目录（本仓库根目录）
-cd KiteChat
+cd ./kitechat
 # 需要 Python >= 3.11（3.11/3.12/3.14 均可用；pyproject.toml 的 requires-python 已锁定下限）
 # 方式一（推荐，uv 管理，依赖锁定在 uv.lock，uv 会自动挑满足要求的 Python）：
 uv venv .venv
