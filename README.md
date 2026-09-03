@@ -33,8 +33,21 @@ KiteChat/            # 本仓库根目录
 
 ## 快速开始（服务端）
 
+### 一键启动（推荐，最快）
+
+进入项目目录后，**双击 / 运行启动脚本即可**——它会自动创建虚拟环境、安装依赖并启动服务端，你需要 Python ≥ 3.11（首次会自动装好依赖）：
+
+| 平台 | 一键启动 |
+|---|---|
+| **Windows** | 双击 `启动服务端.bat` |
+| **Linux** | `bash 启动服务端.sh` |
+
+> 两个脚本都会**首次自动创建 `.venv`**（`uv` 优先、`pip` 兜底）并安装依赖，之后直接启动服务端监听 8920。依赖只有三个：`aiohttp`（运行必需）、`pywebview` + `pyinstaller`（一键导出 Windows EXE 时用）。
+
+### 若一键启动不行 → 手动执行命令
+
 ```bash
-# 克隆后进入项目目录（本仓库根目录）
+# 进入项目目录（本仓库根目录）
 cd ./kitechat
 # 需要 Python >= 3.11（3.11/3.12/3.14 均可用；pyproject.toml 的 requires-python 已锁定下限）
 # 方式一（推荐，uv 管理，依赖锁定在 uv.lock，uv 会自动挑满足要求的 Python）：
@@ -46,17 +59,6 @@ python -m venv .venv
 # Linux: .venv/bin/python -m pip install -r requirements.txt
 # Windows: .venv\Scripts\python -m pip install -r requirements.txt
 ```
-
-### 启动服务端（按平台）
-
-| 平台 | 方式 |
-|---|---|
-| **Windows** | 双击 `启动服务端.bat`（或 `cd KiteChat && .venv\Scripts\python.exe run.py`） |
-| **Linux** | `bash 启动服务端.sh`（自动建 venv，`uv` 优先 / `pip` 兜底） |
-
-> 两个启动脚本都会**首次自动创建 `.venv`**（uv 优先、pip 兜底）并安装依赖，之后直接启动服务端监听 8920。
-
-依赖只有三个：`aiohttp`（运行必需）、`pywebview` + `pyinstaller`（一键导出 Windows EXE 时用）。
 
 启动后控制台打印：
 
