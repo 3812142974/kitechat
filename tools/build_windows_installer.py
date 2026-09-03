@@ -68,9 +68,12 @@ def copy_server_source() -> None:
     os.makedirs(SERVER_HOME, exist_ok=True)
     shutil.copy2(os.path.join(ROOT, "run.py"), SERVER_HOME)
     shutil.copy2(os.path.join(ROOT, "requirements.txt"), SERVER_HOME)
+    # 幂等：旧构建残留的子目录先删掉再复制，避免 copytree 目标已存在报 FileExistsError
+    shutil.rmtree(os.path.join(SERVER_HOME, "server"), ignore_errors=True)
     shutil.copytree(os.path.join(ROOT, "server"), os.path.join(SERVER_HOME, "server"),
                     ignore=shutil.ignore_patterns("__pycache__"))
     # 服务端 / 与 /static/ 需要客户端网页资源
+    shutil.rmtree(os.path.join(SERVER_HOME, "client", "web"), ignore_errors=True)
     shutil.copytree(os.path.join(ROOT, "client", "web"),
                     os.path.join(SERVER_HOME, "client", "web"),
                     ignore=shutil.ignore_patterns("config.bin"))
