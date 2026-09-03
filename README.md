@@ -34,11 +34,12 @@ KiteChat/            # 本仓库根目录
 ```bash
 # 克隆后进入项目目录（本仓库根目录）
 cd KiteChat
-# 方式一（推荐，uv 管理，依赖锁定在 uv.lock）：
-uv venv .venv --python 3.11
+# 需要 Python >= 3.11（3.11/3.12/3.14 均可用；pyproject.toml 的 requires-python 已锁定下限）
+# 方式一（推荐，uv 管理，依赖锁定在 uv.lock，uv 会自动挑满足要求的 Python）：
+uv venv .venv
 uv sync                          # 按 pyproject.toml + uv.lock 精确安装
 
-# 方式二（没装 uv 时自动等价，Python 自带 venv + pip）：
+# 方式二（没装 uv 时自动等价，Python 自带 venv + pip，需本机 Python >= 3.11）：
 python -m venv .venv
 .venv/Scripts/python.exe -m pip install -r requirements.txt
 
@@ -82,7 +83,7 @@ OneBot V11 :  ws://<局域网IP>:8920/onebot      ← Bot 反向 WS 接入
 | Android | 原生 WebView 壳 + Gradle + apksigner | `exports/android/KiteChat-android-*.apk`（直接安装） |
 
 导出前需保证：
-- 服务端运行环境装有 Python 3.11 + aiohttp/pywebview/pyinstaller。
+- 服务端运行环境装有 Python **≥ 3.11** + aiohttp/pywebview/pyinstaller。
   若未安装，可先执行：`pip install -r requirements.txt`
 - Android 构建需要 **JDK 17+** 与 **Android SDK**。**导出 APK 时才检查，不影响服务端启动**：
   导出一键脚本 `tools/setup_android_sdk.sh` 会自动完成 **检测 → 缺失自动安装 → 写入配置** 全流程：
