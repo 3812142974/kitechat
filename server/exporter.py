@@ -110,14 +110,25 @@ def _find_jdk() -> str:
             _JDK_CACHE["v"] = r
             return r
     home = os.path.expanduser("~")
-    # candidate *bases*, each enumerated for child dirs (D: first per preference)
-    candidate_bases = [
-        os.path.join(home, "AppData", "Local", "Programs"),
-        r"D:\Program Files\Java",
-        r"C:\Program Files\Eclipse Adoptium",
-        r"C:\Program Files\Java",
-        r"C:\Program Files\Microsoft",
-    ]
+    _je = _java_exe()
+    _jc = _javac_exe()
+    if _is_windows():
+        candidate_bases = [
+            os.path.join(home, "AppData", "Local", "Programs"),
+            r"D:\Program Files\Java",
+            r"C:\Program Files\Eclipse Adoptium",
+            r"C:\Program Files\Java",
+            r"C:\Program Files\Microsoft",
+        ]
+    else:
+        # Linux / other: common JDK install roots
+        candidate_bases = [
+            "/usr/lib/jvm",
+            "/opt/java",
+            "/opt",
+            os.path.join(home, ".jdks"),
+            "/usr/java",
+        ]
     # collect all valid JDK homes then pick the one with the highest version
     found: list[str] = []
     for base in candidate_bases:
@@ -132,7 +143,9 @@ def _find_jdk() -> str:
             p = os.path.join(base, name)
             if not os.path.isdir(p):
                 continue
-            # quick filter: only bother _resolve_jdk_home on plausible JDK dirs
+            # only bother on plausible JDK dirs (has bin/java)
+            if not os.path.isfile(os.path.join(p, "bin", _je)):
+                continue
             jdk = _resolve_jdk_home(p)
             if jdk and jdk not in found:
                 found.append(jdk)
@@ -140,9 +153,10 @@ def _find_jdk() -> str:
         best = _pick_highest_jdk(found)
         _JDK_CACHE["v"] = best
         return best
-    # last resort: search shallowly under Program Files for java+javac
-    # (limited to a small, targeted set; never scan the whole Program Files tree)
-    for base in (r"D:\Program Files", r"C:\Program Files", r"C:\Program Files (x86)"):
+    # last resort: search shallowly under known roots for java+javac
+    # (limited to a small, targeted set; never scan the whole filesystem tree)
+    for base in (r"D:\Program Files", r"C:\Program Files", r"C:\Program Files (x86)",
+                 "/usr/lib/jvm", "/opt", "/usr/java"):
         if not os.path.isdir(base):
             continue
         for name in ("Java", "Eclipse Adoptium", "jdk*", "java*", "Microsoft"):
@@ -150,8 +164,8 @@ def _find_jdk() -> str:
             for dirpath in glob.glob(os.path.join(base, name)):
                 if not os.path.isdir(dirpath):
                     continue
-                if os.path.isfile(os.path.join(dirpath, "bin", "java.exe")) \
-                        and os.path.isfile(os.path.join(dirpath, "bin", "javac.exe")):
+                if os.path.isfile(os.path.join(dirpath, "bin", _je)) \
+                        and os.path.isfile(os.path.join(dirpath, "bin", _jc)):
                     jdk = _resolve_jdk_home(dirpath)
                     if jdk and jdk not in found:
                         found.append(jdk)
@@ -177,13 +191,26 @@ def _pick_highest_jdk(cands: list[str]) -> str:
     return sorted(cands, key=lambda p: (-ver(p), path_bias(p)))[0]
 
 
+def _java_exe() -> str:
+    """Platform-aware java binary name: 'java.exe' on Windows, 'java' elsewhere."""
+    return "java.exe" if _is_windows() else "java"
+
+
+def _javac_exe() -> str:
+    """Platform-aware javac binary name: 'javac.exe' on Windows, 'javac' elsewhere."""
+    return "javac.exe" if _is_windows() else "javac"
+
+
 def _resolve_jdk_home(cand: str) -> str:
-    """Return cand if it's a real JDK home (has bin/java.exe AND bin/javac.exe),
+    """Return cand if it's a real JDK home (has bin/java AND bin/javac),
     else try to follow symlink-ish 'latest' folders / children. Empty when invalid.
     Requiring javac excludes JREs (Android build needs the full JDK)."""
+    _je = _java_exe()
+    _jc = _javac_exe()
+
     def is_jdk(p: str) -> bool:
-        return (os.path.isfile(os.path.join(p, "bin", "java.exe"))
-                and os.path.isfile(os.path.join(p, "bin", "javac.exe")))
+        return (os.path.isfile(os.path.join(p, "bin", _je))
+                and os.path.isfile(os.path.join(p, "bin", _jc)))
     saw: set[str] = set()
 
     def walk(p: str) -> str:
@@ -209,8 +236,43 @@ def _resolve_jdk_home(cand: str) -> str:
     return walk(cand)
 
 
+def _is_windows() -> bool:
+    """True on native Windows (not under WSL/MSYS)."""
+    return os.name == "nt"
+
+
+def _auto_install_sdk_jdk() -> str:
+    """Run tools/setup_android_sdk.py to install missing SDK/JDK.
+
+    The Python installer is the canonical path: it is cross-platform and has
+    NO dependency on Git (the .sh/.bat wrappers would need git-bash/cmd and
+    may not exist on the user's machine). Returns a status string to append
+    to the detection message; "" when the script is missing."""
+    script = os.path.join(cfg.ROOT, "tools", "setup_android_sdk.py")
+    if not os.path.isfile(script):
+        return ""
+    try:
+        cp = subprocess.run(
+            [sys.executable, script], capture_output=True, text=True,
+            timeout=900, encoding="utf-8", errors="replace")
+        return "auto-install done" if cp.returncode == 0 \
+            else f"auto-install failed: {(cp.stderr or cp.stdout)[-300:]}"
+    except Exception as e:  # noqa: BLE001
+        return f"auto-install error: {e}"
+
+
+def _clear_tool_cache() -> None:
+    """Force _find_sdk/_find_jdk to re-scan (e.g. after an auto-install)."""
+    _SDK_CACHE["v"] = None
+    _JDK_CACHE["v"] = None
+
+
 def _ensure_android_config(android_dir: str) -> tuple[bool, str]:
     """Auto-detect SDK/JDK and write sdk.dir into local.properties.
+
+    When SDK and/or JDK are missing, attempts an automatic install via
+    tools/setup_android_sdk.sh (platform-aware). Retries detection once
+    after the install so a successful run proceeds to build.
 
     Returns (ok, message). ok is True when an SDK was located so Gradle can
     build; a missing JDK is reported as a warning but not fatal here."""
@@ -218,6 +280,19 @@ def _ensure_android_config(android_dir: str) -> tuple[bool, str]:
     sdk = _find_sdk()
     jdk = _find_jdk()
     msg = []
+
+    # --- auto-install when anything is missing ---
+    if not sdk or not jdk:
+        ans = _auto_install_sdk_jdk()
+        if ans:
+            msg.append(ans)
+        # re-detect after install attempt (clear cache so _find_* re-scans)
+        _clear_tool_cache()
+        sdk2 = _find_sdk()
+        jdk2 = _find_jdk()
+        sdk = sdk2 or sdk
+        jdk = jdk2 or jdk
+
     if not sdk:
         msg.append(
             "未检测到 Android SDK，请设置 ANDROID_HOME 或安装后重试"
@@ -482,6 +557,25 @@ def _build_windows(job: _Job, ws: str, version: str, scheme: str, app_name: str)
         job.error = f"EXE 未生成: {exe}"
 
 
+def _gradlew(android_dir: str) -> str:
+    """Platform-aware gradlew wrapper: gradlew.bat on Windows, gradlew elsewhere."""
+    if _is_windows():
+        return os.path.join(android_dir, "gradlew.bat")
+    return os.path.join(android_dir, "gradlew")
+
+
+def _apksigner(sdk: str) -> str:
+    """Locate apksigner, platform-aware (apksigner.bat on Windows, apksigner elsewhere)."""
+    if not sdk:
+        return ""
+    name = "apksigner.bat" if _is_windows() else "apksigner"
+    for bt in ("35.0.0", "34.0.0", "33.0.0"):
+        cand = os.path.join(sdk, "build-tools", bt, name)
+        if os.path.exists(cand):
+            return cand
+    return shutil.which("apksigner") or ""
+
+
 def _build_android(job: _Job, ws: str, version: str, scheme: str,
                    app_name: str, ca_cert: str):
     android_dir = cfg.ANDROID_DIR
@@ -516,12 +610,19 @@ def _build_android(job: _Job, ws: str, version: str, scheme: str,
     _obfuscate_into_bin(payload, os.path.join(assets_web, "config.bin"))
 
     # decide gradle: prefer wrapper
-    gradle = os.path.join(android_dir, "gradlew.bat")
+    gradle = _gradlew(android_dir)
     jdk = _find_jdk()
     env = dict(os.environ)
     if jdk:
         env["JAVA_HOME"] = jdk
     env.setdefault("ANDROID_HOME", _find_sdk())
+
+    if not _is_windows():
+        # gradlew shell script needs the exec bit on Linux
+        try:
+            os.chmod(gradle, os.stat(gradle).st_mode | 0o111)
+        except OSError:
+            pass
 
     job.stage = "Gradle assembleRelease"
     job.progress = 15
@@ -579,13 +680,7 @@ def _sign_apk(job: _Job, apk: str) -> str:
         job.status = "failed"
         job.error = "缺少签名密码/别名，请设置 KITECHAT_KEYSTORE_PASS / KITECHAT_KEYSTORE_ALIAS"
         return ""
-    apksigner = shutil.which("apksigner")
-    if not apksigner:
-        for bt in ("35.0.0", "34.0.0", "33.0.0"):
-            cand = os.path.join(sdk, "build-tools", bt, "apksigner.bat")
-            if os.path.exists(cand):
-                apksigner = cand
-                break
+    apksigner = _apksigner(sdk)
     if not apksigner:
         job.status = "failed"
         job.error = "未找到 apksigner (build-tools)，请安装 build-tools;35.0.0"

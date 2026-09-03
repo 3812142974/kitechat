@@ -3,6 +3,8 @@
 **核心特点**：服务端独立部署 + 多端客户端（Windows EXE / Android APK），
 全程 OneBot V11 标准协议通信，与各 QQ 机器人框架无缝对接。
 
+**支持平台**：Windows / Linux（服务端；客户端导出双端）。mac 暂无适配计划。
+
 ```
 KiteChat/            # 本仓库根目录
 ├── run.py                  # 服务端启动入口
@@ -41,13 +43,18 @@ uv sync                          # 按 pyproject.toml + uv.lock 精确安装
 
 # 方式二（没装 uv 时自动等价，Python 自带 venv + pip，需本机 Python >= 3.11）：
 python -m venv .venv
-.venv/Scripts/python.exe -m pip install -r requirements.txt
-
-# 启动：双击 启动服务端.bat
-#   → 自动检测：有 uv 走 uv（首建 venv + sync，之后每次启动秒级对齐依赖）
-#   → 没有 uv 则自动切换 python -m venv + pip install -r requirements.txt
-#   或直接手动：.venv/Scripts/python.exe run.py
+# Linux: .venv/bin/python -m pip install -r requirements.txt
+# Windows: .venv\Scripts\python -m pip install -r requirements.txt
 ```
+
+### 启动服务端（按平台）
+
+| 平台 | 方式 |
+|---|---|
+| **Windows** | 双击 `启动服务端.bat`（或 `cd KiteChat && .venv\Scripts\python.exe run.py`） |
+| **Linux** | `bash 启动服务端.sh`（自动建 venv，`uv` 优先 / `pip` 兜底） |
+
+> 两个启动脚本都会**首次自动创建 `.venv`**（uv 优先、pip 兜底）并安装依赖，之后直接启动服务端监听 8920。
 
 依赖只有三个：`aiohttp`（运行必需）、`pywebview` + `pyinstaller`（一键导出 Windows EXE 时用）。
 
@@ -86,31 +93,25 @@ OneBot V11 :  ws://<局域网IP>:8920/onebot      ← Bot 反向 WS 接入
 - 服务端运行环境装有 Python **≥ 3.11** + aiohttp/pywebview/pyinstaller。
   若未安装，可先执行：`pip install -r requirements.txt`
 - Android 构建需要 **JDK 17+** 与 **Android SDK**。**导出 APK 时才检查，不影响服务端启动**：
-  导出一键脚本 `tools/setup_android_sdk.sh` 会自动完成 **检测 → 缺失自动安装 → 写入配置** 全流程：
-  - **检测顺序**：
-    - SDK：环境变量 `ANDROID_HOME` → `ANDROID_SDK_ROOT` → 项目内 `tools/android-sdk` → 常见路径（LocalAppData / 用户目录 / C:或D:根目录的 Android/Sdk）
-    - JDK：环境变量 `JAVA_HOME` → `java` 命令解析 → 项目内 `tools/jdk` → 常见 `Program Files/Java` / `Eclipse Adoptium` 路径
+  安装器 `tools/setup_android_sdk.py`（跨平台，无 Git 依赖）自动完成 **检测 → 缺失自动安装 → 写入配置**：
+  - **检测顺序**（平台自适应：Windows 查 Java/Program Files，Linux 查 /usr/lib/jvm、/opt）：
+    - SDK：环境变量 `ANDROID_HOME` → `ANDROID_SDK_ROOT` → 项目内 `tools/android-sdk` → 常见路径
+    - JDK：环境变量 `JAVA_HOME` → `java` 命令解析 → 项目内 `tools/jdk` → 常见 JDK 目录
   - **检测到**：自动把 `sdk.dir` 写入 `client/android/local.properties`，无需手动填。
-  - **未检测到（自动安装）**：脚本直接在**项目内**下载安装，无需用户动手：
-    - Android SDK → 装到 `tools/android-sdk/`（自动安装 `platform-tools`、`platforms;android-35`、`build-tools;35.0.0`）
-    - JDK 17（Temurin）→ 装到 `tools/jdk/`
-    - 安装后自动写配置，可直接开始构建。
-- **两种方式任选其一**：
-  - **① 自动安装**（推荐）：运行 `bash tools/setup_android_sdk.sh`，脚本检测不到就自动装到项目内。
-  - **② 手动安装**：按官网链接自行下载并设置环境变量——Android 命令行工具 <https://developer.android.com/studio#command-line-tools-only> 、OpenJDK 17+ <https://adoptium.net/temurin/releases/?version=17> ，然后 `export ANDROID_HOME=<你的sdk路径>`、`export JAVA_HOME=<你的jdk路径>`。
+  - **未检测到（自动安装）**：直接按平台下载安装到**项目内**，无需用户动手：
+    - Windows：`commandlinetools-win` + JDK `windows/x64`；Linux：`commandlinetools-linux` + JDK `linux/x64`
+    - Android SDK → `tools/android-sdk/`（自动装 `platform-tools`、`platforms;android-35`、`build-tools;35.0.0`）
+    - JDK 17（Temurin）→ `tools/jdk/`；安装后自动写配置，可直接开始构建。
+- **执行入口**（三者等价，自动检测平台）：
+  - `python tools/setup_android_sdk.py`（推荐，跨平台）
+  - Windows 也可双击 `tools/setup_android_sdk.bat`
+  - Linux 也可 `bash tools/setup_android_sdk.sh`
+- **手动安装**（可选）：Android 命令行工具官网 <https://developer.android.com/studio#command-line-tools-only> ；OpenJDK 17+ <https://adoptium.net/temurin/releases/?version=17> ；然后 `export ANDROID_HOME=<你的sdk路径>`、`export JAVA_HOME=<你的jdk路径>`。
 
 | 依赖 | 安装到 | 大约占用空间 |
 |---|---|---|
 | Android SDK（commandlinetools + platform-tools + android-35 + build-tools 35.0.0） | `tools/android-sdk/` | **约 1.5~2.5 GB** |
 | JDK 17（Temurin） | `tools/jdk/` | **约 200~300 MB** |
-
-> 提示：以上目录均已被 `.gitignore` 排除，不会推送进仓库。首次 APK 构建约 3-8 分钟（Gradle 下载依赖），之后增量很快；若你想手动装到别处，只需设置好 `ANDROID_HOME` / `JAVA_HOME` 即可。
-
-注入机制：导出时把 `{"ws_address": "...", "server_url": "...", "app_name": "..."}`
-写入混淆后的 `config.bin`（XOR+Base64，客户端运行时解码）。客户端文件里不含明文服务器地址，解包只能看到一串乱码。EXE 与 APK 启动时自动解码并连接。
-
-应用图标：三端（网页 favicon / EXE / APK）统一使用 `tools/kite-logo.png`。
-更换图标：替换该文件后运行 `tools/make_icons.py`（需 Pillow），再重新导出双端。
 
 ## 客户端功能
 
