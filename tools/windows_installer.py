@@ -27,6 +27,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import tkinter as tk
 from tkinter import messagebox, filedialog
 
@@ -195,10 +196,10 @@ def do_install(target: str, progress_cb) -> str:
 
 
 def desktop_lnk(target: str) -> str:
-    """在桌面创建启动入口(无 pywin32 依赖)。
+    """在桌面创建真正的 .lnk 快捷方式（无 pywin32 依赖）。
 
-    写 {APP_NAME}.bat 到用户桌面，双击即用嵌入式 python 启动服务端。
-    返回入口路径或 ""。
+    用 Python 内嵌的 PowerShell WScript.Shell COM 生成（Win10/11 自带 powershell），
+    支持图标/目标程序/工作目录/启动参数。返回 .lnk 路径或 ""。
     """
     try:
         import ctypes
@@ -209,31 +210,71 @@ def desktop_lnk(target: str) -> str:
         if rc != 0 or not buf.value:
             return ""
         desktop = buf.value
+        lnk = os.path.join(desktop, APP_NAME + ".lnk")
+
         pyw = os.path.join(target, "python", "pythonw.exe")
         if not os.path.isfile(pyw):
             pyw = os.path.join(target, "python", "python.exe")
-        target_exe = pyw or os.path.join(target, "run.py")
-        args = '"%s"' % os.path.join(target, "run.py")
-        bat = os.path.join(desktop, APP_NAME + ".bat")
-        with open(bat, "w", encoding="ascii", newline="\r\n") as f:
-            f.write('@echo off\r\n'
-                    'start "" "%s" %s\r\n'
-                    'if errorlevel 1 pause\r\n' % (target_exe, args))
-        return bat
+        if not os.path.isfile(pyw):
+            return ""
+        runpy = os.path.join(target, "run.py")
+        if not os.path.isfile(runpy):
+            return ""
+
+        # 图标：优先安装目录内随包的 app.ico
+        icon = ""
+        for cand in (os.path.join(target, "client", "desktop", "app.ico"),
+                     os.path.join(target, "server", "webui", "app.ico")):
+            if os.path.isfile(cand):
+                icon = cand
+                break
+
+        def psq(s: str) -> str:
+            # PowerShell 单引号转义（单引号以内原样，'' 代表一个单引号）
+            return "'" + str(s).replace("'", "''") + "'"
+
+        lines = [
+            "$s=(New-Object -ComObject WScript.Shell).CreateShortcut(%s)" % psq(lnk),
+            "$s.TargetPath=%s" % psq(pyw),
+            "$s.Arguments=%s" % psq('"' + runpy + '"'),
+            "$s.WorkingDirectory=%s" % psq(target),
+            "$s.WindowStyle=7",          # 最小化（pythonw 无控制台，尽量不闪窗）
+            "$s.Description='KiteChat 服务端'",
+        ]
+        if icon:
+            lines.append("$s.IconLocation=%s" % psq(icon))
+        lines.append("$s.Save()")
+        script = "\r\n".join(lines)
+
+        tmp = os.path.join(tempfile.gettempdir(), "kitechat_mklnk.ps1")
+        with open(tmp, "w", encoding="utf-8-sig") as f:
+            f.write(script)
+        try:
+            subprocess.run(
+                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                 "-File", tmp],
+                capture_output=True, timeout=20)
+        finally:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+
+        return lnk if os.path.isfile(lnk) else ""
     except Exception:
         return ""
 
 
 def do_uninstall(root: str) -> None:
     stop_server()
-    # 删除桌面快捷方式（与 desktop_lnk 保持一致：0x0010 + .bat）
+    # 删除桌面快捷方式（与 desktop_lnk 保持一致：0x0010 定位 + .lnk；兼容旧版 .bat）
     try:
         import ctypes
         sh = ctypes.windll.shell32
         buf = ctypes.create_unicode_buffer(300)
         if sh.SHGetFolderPathW(None, 0x0010, None, 0, buf) == 0 and buf.value:
             desktop = buf.value
-            for fn in (APP_NAME + ".bat", APP_NAME + ".lnk"):
+            for fn in (APP_NAME + ".lnk", APP_NAME + ".bat"):
                 p = os.path.join(desktop, fn)
                 if os.path.isfile(p):
                     os.remove(p)
