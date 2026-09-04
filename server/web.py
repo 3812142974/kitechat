@@ -618,28 +618,6 @@ async def admin_login(request: web.Request) -> web.Response:
     return json_ok({"ok": True})
 
 
-async def admin_forgot_token(request: web.Request) -> web.Response:
-    """Generate a new admin token, print it to server console, and return it.
-
-    This is the "forgot password" flow: no authentication required.
-    The new token is printed to the server console (visible only to the
-    person running the server) and returned in the API response so the
-    WebUI can display it in a toast.  The old token is immediately invalidated.
-    """
-    new_token = secrets.token_urlsafe(16)
-    db = dbmod.get_db()
-    old_token = db.get_config("admin_token")
-    db.set_config("admin_token", new_token)
-    # Print to server console with a clear visual marker
-    print("\n" + "=" * 50)
-    print("  ⚠️  管理员令牌已重置（忘记密码触发）")
-    print(f"  新令牌: {new_token}")
-    print("  请妥善保存，此令牌仅显示一次。")
-    print("=" * 50 + "\n")
-    log.info("admin token reset via forgot-token (old=%s...)", old_token[:8] if old_token else "(none)")
-    return json_ok({"token": new_token, "message": "新令牌已打印到服务端控制台"})
-
-
 async def admin_change_token(request: web.Request) -> web.Response:
     """Change the admin token. Requires the CURRENT token (X-Admin-Token)."""
     err = require_admin(request)
@@ -977,7 +955,6 @@ def create_app() -> web.Application:
     app.router.add_get("/avatar/{name}", avatar_file)
 
     app.router.add_post("/api/admin/login", admin_login)
-    app.router.add_post("/api/admin/forgot-token", admin_forgot_token)
     app.router.add_post("/api/admin/change-token", admin_change_token)
     app.router.add_get("/api/admin/config", admin_get_config)
     app.router.add_post("/api/admin/config", admin_set_config)

@@ -21,20 +21,6 @@ from aiohttp import web as _web
 
 
 def main() -> None:
-    # Handle --new-token: generate and print a new admin token, then exit
-    if "--new-token" in sys.argv:
-        from server import db as dbmod
-        import secrets as _secrets
-        db = dbmod.get_db()
-        new_token = _secrets.token_urlsafe(16)
-        db.set_config("admin_token", new_token)
-        print("=" * 50)
-        print("  新管理员令牌已生成:")
-        print(f"  {new_token}")
-        print("  请妥善保存，此令牌仅显示一次。")
-        print("=" * 50)
-        return
-
     from server.web import create_app
     app = create_app()  # this also initializes the database
 
