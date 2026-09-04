@@ -123,6 +123,9 @@ pre.logs{background:#0b0d10;border:1px solid var(--border);border-radius:8px;pad
   <p>输入管理员令牌登录。令牌在服务端首次启动时打印于控制台，也可用 run.py --new-token 重新生成。</p>
   <div class="field"><input id="ltoken" type="password" placeholder="admin token" onkeydown="if(event.key==='Enter')doLogin()"></div>
   <button class="btn" style="width:100%;justify-content:center" onclick="doLogin()">登 录</button>
+  <div style="text-align:center;margin-top:12px">
+    <a href="#" style="color:#888;font-size:13px;text-decoration:none" onclick="forgotToken();return false">忘记密码？</a>
+  </div>
 </div>
 
 <!-- ================= MAIN ================= -->
@@ -398,6 +401,15 @@ async function api(path, method='GET', body=null){
   const j = await r.json().catch(()=>({status:'failed',msg:'响应解析失败'}));
   if(j.status !== 'ok') throw new Error(j.msg || ('HTTP '+r.status));
   return j.data;
+}
+
+// ---------- forgot token ----------
+async function forgotToken(){
+  if(!confirm('将生成新的管理员令牌并打印到服务端控制台。\n旧令牌将立即失效。\n确定继续？')) return;
+  try{
+    const d = await api('/api/admin/forgot-token','POST',{});
+    toast('新令牌已生成，请查看服务端控制台输出');
+  }catch(e){ toast('生成失败: '+e.message, false); }
 }
 
 // ---------- login ----------
