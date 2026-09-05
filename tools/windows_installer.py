@@ -28,7 +28,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import threading
 import tkinter as tk
 from tkinter import messagebox, filedialog
 
@@ -184,10 +183,17 @@ def do_install(target: str, progress_cb) -> str:
         return "未找到内置服务端数据 (KiteChatServer)"
     os.makedirs(target, exist_ok=True)
     _copy_tree(src_server, target)
-    # 复制桌面面板 EXE
-    src_panel = os.path.join(b, "KiteChat-Panel.exe")
+    # 复制桌面面板
+    src_panel = os.path.join(b, "tools", "macos_installer.py")
+    if not os.path.isfile(src_panel):
+        src_panel = os.path.join(b, "client", "desktop", "panel.py")
     if os.path.isfile(src_panel):
-        shutil.copy2(src_panel, os.path.join(target, "KiteChat-Panel.exe"))
+        shutil.copy2(src_panel, os.path.join(target, "panel.py"))
+    # 安装 pywebview (桌面面板需要)
+    py = os.path.join(target, "python", "python.exe")
+    if os.path.isfile(py):
+        subprocess.run([py, "-m", "pip", "install", "pywebview", "-q"],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
     # 生成启动脚本（用嵌入式 python）
     py = os.path.join(target, "python", "python.exe")
     bat = os.path.join(target, "启动服务端.bat")
@@ -200,9 +206,9 @@ def do_install(target: str, progress_cb) -> str:
 
 
 def desktop_lnk(target: str) -> str:
-    """在桌面创建真正的 .lnk 快捷方式（无 pywin32 依赖）。
+    """在桌面创建真正的 .lnk 快捷方式。
 
-    指向 KiteChat-Panel.exe（桌面管理面板）。
+    指向 panel.py (桌面管理面板)。
     """
     try:
         import ctypes
@@ -214,8 +220,9 @@ def desktop_lnk(target: str) -> str:
         desktop = buf.value
         lnk = os.path.join(desktop, APP_NAME + ".lnk")
 
-        panel_exe = os.path.join(target, "KiteChat-Panel.exe")
-        if not os.path.isfile(panel_exe):
+        py = os.path.join(target, "python", "python.exe")
+        panel = os.path.join(target, "panel.py")
+        if not os.path.isfile(py) or not os.path.isfile(panel):
             return ""
 
         # 图标：优先安装目录内随包的 app.ico
@@ -232,7 +239,8 @@ def desktop_lnk(target: str) -> str:
 
         lines = [
             "$s=(New-Object -ComObject WScript.Shell).CreateShortcut(%s)" % psq(lnk),
-            "$s.TargetPath=%s" % psq(panel_exe),
+            "$s.TargetPath=%s" % psq(py),
+            "$s.Arguments=%s" % psq('"' + panel + '"'),
             "$s.WorkingDirectory=%s" % psq(target),
             "$s.Description='KiteChat 桌面面板'",
         ]
@@ -363,15 +371,7 @@ class App(tk.Tk):
         target = os.path.join(self.path_var.get(), APP_NAME)
         self.status_var.set("安装中…")
         self.update()
-        def _run():
-            try:
-                res = do_install(target, None)
-            except Exception as e:
-                res = str(e)
-            self.after(0, lambda: self._on_install_done(target, res))
-        threading.Thread(target=_run, daemon=True).start()
-
-    def _on_install_done(self, target: str, res: str) -> None:
+        res = do_install(target, None)
         if res != "ok":
             self.status_var.set("安装失败: " + res)
             return
@@ -379,6 +379,7 @@ class App(tk.Tk):
         start_server(target)
         self.status_var.set("安装完成并已启动。\n桌面快捷方式: %s" % (lnk or "已创建"))
         self.root_installed = target
+        # 刷新为后台面板
         self.after(500, lambda: self._build_installed())
 
     # ---------- 后台面板 ----------
@@ -458,15 +459,7 @@ class App(tk.Tk):
                                    "将停止服务并删除安装目录 %s，确定？\n（此操作不可恢复）"
                                    % self.root_installed):
             return
-        self.status_var.set("卸载中…")
-        self.update()
-        root = self.root_installed
-        def _run():
-            do_uninstall(root)
-            self.after(0, self._on_uninstall_done)
-        threading.Thread(target=_run, daemon=True).start()
-
-    def _on_uninstall_done(self) -> None:
+        do_uninstall(self.root_installed)
         self.root_installed = ""
         self._build_installer()
 
