@@ -183,10 +183,17 @@ def do_install(target: str, progress_cb) -> str:
         return "未找到内置服务端数据 (KiteChatServer)"
     os.makedirs(target, exist_ok=True)
     _copy_tree(src_server, target)
-    # 复制桌面面板 EXE
-    src_panel = os.path.join(b, "KiteChat-Panel.exe")
+    # 复制桌面面板
+    src_panel = os.path.join(b, "tools", "macos_installer.py")
+    if not os.path.isfile(src_panel):
+        src_panel = os.path.join(b, "client", "desktop", "panel.py")
     if os.path.isfile(src_panel):
-        shutil.copy2(src_panel, os.path.join(target, "KiteChat-Panel.exe"))
+        shutil.copy2(src_panel, os.path.join(target, "panel.py"))
+    # 安装 pywebview (桌面面板需要)
+    py = os.path.join(target, "python", "python.exe")
+    if os.path.isfile(py):
+        subprocess.run([py, "-m", "pip", "install", "pywebview", "-q"],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
     # 生成启动脚本（用嵌入式 python）
     py = os.path.join(target, "python", "python.exe")
     bat = os.path.join(target, "启动服务端.bat")
@@ -199,9 +206,9 @@ def do_install(target: str, progress_cb) -> str:
 
 
 def desktop_lnk(target: str) -> str:
-    """在桌面创建真正的 .lnk 快捷方式（无 pywin32 依赖）。
+    """在桌面创建真正的 .lnk 快捷方式。
 
-    指向 KiteChat-Panel.exe（桌面管理面板）。
+    指向 panel.py (桌面管理面板)。
     """
     try:
         import ctypes
@@ -213,8 +220,9 @@ def desktop_lnk(target: str) -> str:
         desktop = buf.value
         lnk = os.path.join(desktop, APP_NAME + ".lnk")
 
-        panel_exe = os.path.join(target, "KiteChat-Panel.exe")
-        if not os.path.isfile(panel_exe):
+        py = os.path.join(target, "python", "python.exe")
+        panel = os.path.join(target, "panel.py")
+        if not os.path.isfile(py) or not os.path.isfile(panel):
             return ""
 
         # 图标：优先安装目录内随包的 app.ico
@@ -231,7 +239,8 @@ def desktop_lnk(target: str) -> str:
 
         lines = [
             "$s=(New-Object -ComObject WScript.Shell).CreateShortcut(%s)" % psq(lnk),
-            "$s.TargetPath=%s" % psq(panel_exe),
+            "$s.TargetPath=%s" % psq(py),
+            "$s.Arguments=%s" % psq('"' + panel + '"'),
             "$s.WorkingDirectory=%s" % psq(target),
             "$s.Description='KiteChat 桌面面板'",
         ]
