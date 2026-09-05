@@ -371,7 +371,15 @@ class App(tk.Tk):
         target = os.path.join(self.path_var.get(), APP_NAME)
         self.status_var.set("安装中…")
         self.update()
-        res = do_install(target, None)
+        def _run():
+            try:
+                res = do_install(target, None)
+            except Exception as e:
+                res = str(e)
+            self.after(0, lambda: self._on_install_done(target, res))
+        threading.Thread(target=_run, daemon=True).start()
+
+    def _on_install_done(self, target: str, res: str) -> None:
         if res != "ok":
             self.status_var.set("安装失败: " + res)
             return
@@ -379,7 +387,6 @@ class App(tk.Tk):
         start_server(target)
         self.status_var.set("安装完成并已启动。\n桌面快捷方式: %s" % (lnk or "已创建"))
         self.root_installed = target
-        # 刷新为后台面板
         self.after(500, lambda: self._build_installed())
 
     # ---------- 后台面板 ----------
@@ -459,7 +466,15 @@ class App(tk.Tk):
                                    "将停止服务并删除安装目录 %s，确定？\n（此操作不可恢复）"
                                    % self.root_installed):
             return
-        do_uninstall(self.root_installed)
+        self.state_lbl.config(text="卸载中…") if hasattr(self, "state_lbl") else None
+        self.update()
+        root = self.root_installed
+        def _run():
+            do_uninstall(root)
+            self.after(0, self._on_uninstall_done)
+        threading.Thread(target=_run, daemon=True).start()
+
+    def _on_uninstall_done(self) -> None:
         self.root_installed = ""
         self._build_installer()
 
