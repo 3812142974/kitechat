@@ -176,14 +176,17 @@ def _copy_tree(src: str, dst: str) -> None:
 
 
 def do_install(target: str, progress_cb) -> str:
-    """把 bundle 里的服务端 + 嵌入式 python 解压到 target。"""
+    """把 bundle 里的服务端 + 嵌入式 python + 桌面面板 解压到 target。"""
     b = bundle_dir()
     src_server = os.path.join(b, "KiteChatServer")
     if not os.path.isdir(src_server):
-        # 开发兜底：用项目根（编译产物）
         return "未找到内置服务端数据 (KiteChatServer)"
     os.makedirs(target, exist_ok=True)
     _copy_tree(src_server, target)
+    # 复制桌面面板 EXE
+    src_panel = os.path.join(b, "KiteChat-Panel.exe")
+    if os.path.isfile(src_panel):
+        shutil.copy2(src_panel, os.path.join(target, "KiteChat-Panel.exe"))
     # 生成启动脚本（用嵌入式 python）
     py = os.path.join(target, "python", "python.exe")
     bat = os.path.join(target, "启动服务端.bat")
@@ -198,27 +201,20 @@ def do_install(target: str, progress_cb) -> str:
 def desktop_lnk(target: str) -> str:
     """在桌面创建真正的 .lnk 快捷方式（无 pywin32 依赖）。
 
-    用 Python 内嵌的 PowerShell WScript.Shell COM 生成（Win10/11 自带 powershell），
-    支持图标/目标程序/工作目录/启动参数。返回 .lnk 路径或 ""。
+    指向 KiteChat-Panel.exe（桌面管理面板）。
     """
     try:
         import ctypes
         sh = ctypes.windll.shell32
         buf = ctypes.create_unicode_buffer(300)
-        # 0x0010 = CSIDL_DESKTOPDIRECTORY（真实桌面，兼容自定义桌面路径）
         rc = sh.SHGetFolderPathW(None, 0x0010, None, 0, buf)
         if rc != 0 or not buf.value:
             return ""
         desktop = buf.value
         lnk = os.path.join(desktop, APP_NAME + ".lnk")
 
-        pyw = os.path.join(target, "python", "pythonw.exe")
-        if not os.path.isfile(pyw):
-            pyw = os.path.join(target, "python", "python.exe")
-        if not os.path.isfile(pyw):
-            return ""
-        runpy = os.path.join(target, "run.py")
-        if not os.path.isfile(runpy):
+        panel_exe = os.path.join(target, "KiteChat-Panel.exe")
+        if not os.path.isfile(panel_exe):
             return ""
 
         # 图标：优先安装目录内随包的 app.ico
@@ -235,11 +231,9 @@ def desktop_lnk(target: str) -> str:
 
         lines = [
             "$s=(New-Object -ComObject WScript.Shell).CreateShortcut(%s)" % psq(lnk),
-            "$s.TargetPath=%s" % psq(pyw),
-            "$s.Arguments=%s" % psq('"' + runpy + '"'),
+            "$s.TargetPath=%s" % psq(panel_exe),
             "$s.WorkingDirectory=%s" % psq(target),
-            "$s.WindowStyle=7",          # 最小化（pythonw 无控制台，尽量不闪窗）
-            "$s.Description='KiteChat 服务端'",
+            "$s.Description='KiteChat 桌面面板'",
         ]
         if icon:
             lines.append("$s.IconLocation=%s" % psq(icon))

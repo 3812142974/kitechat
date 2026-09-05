@@ -3,7 +3,7 @@
 **核心特点**：服务端独立部署 + 多端客户端（Windows EXE / Android APK），
 全程 OneBot V11 标准协议通信，与各 QQ 机器人框架无缝对接。
 
-**支持平台**：Windows / Linux（服务端；客户端导出双端）。mac 暂无适配计划。
+**支持平台**：Windows / Linux / macOS（服务端；客户端导出多端）。
 
 ```
 KiteChat/            # 本仓库根目录
@@ -31,38 +31,51 @@ KiteChat/            # 本仓库根目录
 └── logs/
 ```
 
-## Windows 一键安装（服务端 · 无需装 Python）
+## 快速开始
 
-> **给最终用户最省事的装法**：拿到 `KiteChat-Server-Installer.exe`（服务端一键安装包，**自带 Python 运行时，无需预装任何东西**），双击运行即可。
+### 方式一：Windows 一键安装（推荐，无需 Python）
 
-**安装流程（全自动）：**
+> 下载 `KiteChat-Server-Installer.exe`，双击运行即可。
+
 1. 双击 `KiteChat-Server-Installer.exe`
-2. 在「安装界面」选择安装路径（默认 `~\KiteChat`），点 **一键安装**
-3. 安装器自动：解压服务端 + 嵌入式 Python 运行时 → 创建**桌面快捷方式** → 自动启动服务端
-4. 之后每次打开桌面快捷方式/安装器 = **服务端后台面板**（原生窗口，非网页壳）：
-   - **运行中** → 绿点，显示后台状态，可点「打开后台」进 WebUI
-   - **未运行** → 红点，点「**启动服务**」一键拉起
-   - 右上角「**卸载**」→ 二次确认 → 停止服务 + 删除安装目录 + 删桌面快捷方式
+2. 选择安装路径（默认 `~\KiteChat`），点**一键安装**
+3. 安装完成：桌面出现 **KiteChat** 快捷方式 → 双击打开桌面面板
+4. 桌面面板功能：
+   - 自动启动服务端
+   - 加载 WebUI 管理界面
+   - 右上角菜单：停止/重启服务
+   - 关闭窗口 = 只关界面，服务继续运行
 
-**特点：** 完全自包含（内置 Python 3.11 + aiohttp/pillow），服务端源码以数据形式打进 EXE，安装到哪都能独立跑，不污染系统、不装任何全局依赖。mac 暂无适配计划。
-
-**从源码构建安装包：**
-```bash
-python tools/build_windows_installer.py   # 产出 dist/KiteChat-Server-Installer.exe
+安装目录结构：
+```
+KiteChat/
+├── KiteChat-Panel.exe    # 桌面面板（双击打开）
+├── run.py                # 服务端（后台运行）
+├── 启动服务端.bat          # 命令行启动
+├── server/               # 服务端代码
+└── client/               # 客户端资源
 ```
 
-## 快速开始（服务端）
+### 方式二：Git 克隆
 
-### 一键启动（推荐，最快）
+```bash
+git clone https://github.com/3812142974/kitechat.git
+cd kitechat
+```
 
-进入项目目录后，**双击 / 运行启动脚本即可**——它会自动创建虚拟环境、安装依赖并启动服务端，你需要 Python ≥ 3.11（首次会自动装好依赖）：
+**使用桌面面板**：
+1. 从 [Releases](https://github.com/3812142974/kitechat/releases) 下载 `KiteChat-Panel.exe`
+2. 把 `KiteChat-Panel.exe` 放到克隆的 `kitechat/` 目录里
+3. 双击 `KiteChat-Panel.exe` 即可（自动启动服务端）
 
-| 平台 | 一键启动 |
-|---|---|
-| **Windows** | 双击 `启动服务端.bat` |
-| **Linux** | `bash 启动服务端.sh` |
+**使用命令行**：
+```bash
+# Windows
+启动服务端.bat
 
-> 两个脚本都会**首次自动创建 `.venv`**（`uv` 优先、`pip` 兜底）并安装依赖，之后直接启动服务端监听 8920。依赖只有三个：`aiohttp`（运行必需）、`pywebview` + `pyinstaller`（一键导出 Windows EXE 时用）。
+# Linux / macOS
+bash 启动服务端.sh
+```
 
 ### 若一键启动不行 → 手动执行命令
 
