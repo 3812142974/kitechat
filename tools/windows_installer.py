@@ -166,35 +166,37 @@ def check_health() -> str:
 
 
 # ---------------------------------------------------------------- 安装
-def _copy_tree(src: str, dst: str) -> None:
+def _copy_tree(src: str, dst: str, progress_cb=None) -> None:
     for root_dir, dirs, files in os.walk(src):
         rel = os.path.relpath(root_dir, src)
         tgt = os.path.join(dst, rel) if rel != "." else dst
         os.makedirs(tgt, exist_ok=True)
         for f in files:
             shutil.copy2(os.path.join(root_dir, f), os.path.join(tgt, f))
+            if progress_cb:
+                progress_cb(f)
 
 
 def do_install(target: str, progress_cb) -> str:
-    """把 bundle 里的服务端 + 嵌入式 python + 桌面面板 解压到 target。"""
+    """把 bundle 里的服务端 + 桌面面板 解压到 target。"""
     b = bundle_dir()
     src_server = os.path.join(b, "KiteChatServer")
     if not os.path.isdir(src_server):
         return "未找到内置服务端数据 (KiteChatServer)"
     os.makedirs(target, exist_ok=True)
-    _copy_tree(src_server, target)
+
+    def _progress(filename):
+        if progress_cb:
+            progress_cb(filename)
+
+    _copy_tree(src_server, target, _progress)
     # 复制桌面面板
     src_panel = os.path.join(b, "tools", "macos_installer.py")
     if not os.path.isfile(src_panel):
         src_panel = os.path.join(b, "client", "desktop", "panel.py")
     if os.path.isfile(src_panel):
         shutil.copy2(src_panel, os.path.join(target, "panel.py"))
-    # 安装 pywebview (桌面面板需要)
-    py = os.path.join(target, "python", "python.exe")
-    if os.path.isfile(py):
-        subprocess.run([py, "-m", "pip", "install", "pywebview", "-q"],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
-    # 生成启动脚本（用嵌入式 python）
+    # 生成启动脚本
     py = os.path.join(target, "python", "python.exe")
     bat = os.path.join(target, "启动服务端.bat")
     with open(bat, "w", encoding="ascii", newline="\r\n") as f:
@@ -371,9 +373,11 @@ class App(tk.Tk):
         target = os.path.join(self.path_var.get(), APP_NAME)
         self.status_var.set("安装中…")
         self.update()
+        def _progress(filename):
+            self.after(0, lambda f=filename: self.status_var.set(f"安装中… {f}"))
         def _run():
             try:
-                res = do_install(target, None)
+                res = do_install(target, _progress)
             except Exception as e:
                 res = str(e)
             self.after(0, lambda: self._on_install_done(target, res))
